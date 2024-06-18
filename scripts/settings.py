@@ -1,0 +1,14 @@
+# Screen dimensions
+WIDTH, HEIGHT = 800, 600
+FPS = 60
+
+# Colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+
+# Game settings
+PLAYER_SPEED = 5
+BULLET_SPEED = -10
+ENEMY_SPEED_MIN = 1
+ENEMY_SPEED_MAX = 8
+POWERUP_SPEED = 5
