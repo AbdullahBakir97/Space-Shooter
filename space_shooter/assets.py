@@ -1,0 +1,105 @@
+"""Image, font and sound loading with caching, scaling and safe fallbacks."""
+
+from __future__ import annotations
+
+from functools import cache
+
+import pygame
+
+from space_shooter.config import MAGENTA, SPRITE_SCALE
+from space_shooter.paths import IMAGES_DIR, SOUNDS_DIR
+
+SPRITE_NAMES = {
+    "player": ["player0", "player1", "player2"],
+    "enemy": ["enemy0", "enemy1"],
+    "explode": ["explode0", "explode1", "explode2", "explode3"],
+}
+DIGIT_NAMES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+
+
+def _placeholder(size: tuple[int, int]) -> pygame.Surface:
+    surf = pygame.Surface(size, pygame.SRCALPHA)
+    surf.fill(MAGENTA)
+    return surf
+
+
+@cache
+def load_image(name: str, scale: int = SPRITE_SCALE) -> pygame.Surface:
+    """Load ``images/<name>.png`` scaled by an integer factor (nearest neighbour).
+
+    Missing files yield a magenta placeholder so the game keeps running.
+    """
+    path = IMAGES_DIR / f"{name}.png"
+    try:
+        raw = pygame.image.load(str(path))
+    except (pygame.error, FileNotFoundError):
+        raw = _placeholder((12, 16))
+    if pygame.display.get_surface() is not None:
+        raw = raw.convert_alpha()
+    if scale != 1:
+        raw = pygame.transform.scale_by(raw, scale)
+    return raw
+
+
+def load_frames(key: str, scale: int = SPRITE_SCALE) -> list[pygame.Surface]:
+    return [load_image(n, scale) for n in SPRITE_NAMES[key]]
+
+
+@cache
+def hue_shifted(name: str, degrees: float, scale: int = SPRITE_SCALE) -> pygame.Surface:
+    """A copy of a sprite with every pixel's hue rotated by ``degrees``.
+
+    Rotating hue keeps the pixel art's shading intact, unlike a multiply tint.
+    The work is done on the unscaled 12x16 source, so it is cheap.
+    """
+    small = load_image(name, 1).copy()
+    width, height = small.get_size()
+    for x in range(width):
+        for y in range(height):
+            colour = small.get_at((x, y))
+            if colour.a == 0:
+                continue
+            h, sat, val, a = colour.hsva
+            shifted = pygame.Color(0)
+            shifted.hsva = ((h + degrees) % 360, sat, val, a)
+            small.set_at((x, y), shifted)
+    return pygame.transform.scale_by(small, scale) if scale != 1 else small
+
+
+@cache
+def silhouette(name: str, colour: tuple[int, int, int], scale: int = SPRITE_SCALE) -> pygame.Surface:
+    """A flat-colour version of a sprite (used for hit flashes)."""
+    base = load_image(name, scale).copy()
+    mask = pygame.mask.from_surface(base)
+    return mask.to_surface(setcolor=(*colour, 255), unsetcolor=(0, 0, 0, 0))
+
+
+@cache
+def font(size: int) -> pygame.font.Font:
+    return pygame.font.Font(None, size)
+
+
+_EXTRA_CACHES: list = []
+
+
+def register_cache(fn):
+    """Decorator: make ``clear_caches`` also clear this lru_cache'd function."""
+    _EXTRA_CACHES.append(fn)
+    return fn
+
+
+def clear_caches() -> None:
+    """Drop cached surfaces/fonts; required after pygame is re-initialised."""
+    for fn in (load_image, hue_shifted, silhouette, font, load_sound, *_EXTRA_CACHES):
+        fn.cache_clear()
+
+
+@cache
+def load_sound(key: str, relative: str) -> pygame.mixer.Sound | None:
+    """Return a Sound or None when the mixer is unavailable or the file is missing."""
+    if not pygame.mixer.get_init():
+        return None
+    try:
+        return pygame.mixer.Sound(str(SOUNDS_DIR / relative))
+    except (pygame.error, FileNotFoundError):
+        return None
