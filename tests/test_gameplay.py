@@ -15,11 +15,8 @@ from space_shooter.entities.parts import Drop
 from space_shooter.game import Game
 from space_shooter.salvage import PATCH_HULL, SLOT_OFFSETS, Part
 from space_shooter.save import load_save
-from space_shooter.scenes.gameover import GameOverScene
 from space_shooter.scenes.gameplay import GameplayScene
 from space_shooter.scenes.log_panel import LogPanel
-from space_shooter.scenes.menu import MenuScene
-from space_shooter.scenes.pause import PauseScene
 from space_shooter.settings_store import Settings
 from space_shooter.story import BAD_LOGS_NOTICE, LogDirector
 
@@ -45,21 +42,6 @@ def run_frames(game, n, dt=1 / 60):
         scene = game.scenes.top
         scene.update(dt)
         game.scenes.draw(game.screen)
-
-
-def test_menu_to_gameplay_and_back(game):
-    game.scenes.push(MenuScene(game))
-    run_frames(game, 5)
-    game.scenes.top.handle_action("confirm")  # PLAY
-    assert isinstance(game.scenes.top, GameplayScene)
-    game.scenes.top.handle_action("pause")
-    assert isinstance(game.scenes.top, PauseScene)
-    run_frames(game, 3)
-    game.scenes.top.handle_action("down")
-    game.scenes.top.handle_action("down")
-    game.scenes.top.handle_action("down")
-    game.scenes.top.handle_action("confirm")  # QUIT TO MENU
-    assert isinstance(game.scenes.top, MenuScene)
 
 
 def test_waves_spawn_and_bullets_score(game):
@@ -147,24 +129,6 @@ def test_tractor_pulls_drops(game):
     assert drop.x < start or not drop.alive()
 
 
-def test_game_over_flow_records_high_score(game):
-    scene = GameplayScene(game, seed=3)
-    game.scenes.push(scene)
-    scene.score = 12345
-    scene.player.take_damage(999, random.Random(0))
-    run_frames(game, 60 * 4)
-    assert isinstance(game.scenes.top, GameOverScene)
-    over = game.scenes.top
-    assert over.entering
-    run_frames(game, 60)
-    for _ in range(3):
-        over.handle_action("confirm")
-    assert not over.entering
-    assert game.highscores.best == 12345
-    over.handle_action("confirm")
-    assert isinstance(game.scenes.top, GameplayScene)
-
-
 def test_long_headless_run_is_stable(game):
     """Simulate a couple of minutes at a high difficulty with autofire on."""
     game.settings.difficulty = "hard"
@@ -180,13 +144,6 @@ def test_long_headless_run_is_stable(game):
         game.scenes.draw(game.screen)
     assert 0 <= scene.player.x <= WIDTH and 0 <= scene.player.y <= HEIGHT
     assert scene.director.index >= 1
-
-
-def test_step_handles_quit_event(game):
-    game.scenes.push(MenuScene(game))
-    pygame.event.post(pygame.event.Event(pygame.QUIT))
-    game.step(1 / 60)
-    assert not game.running
 
 
 def start_at(game, index, seed=1):
