@@ -7,7 +7,8 @@ from functools import cache
 import pygame
 
 from space_shooter import assets
-from space_shooter.config import CYAN, HEIGHT, ORANGE, RED, WHITE, WIDTH, YELLOW
+from space_shooter.config import HEIGHT, WIDTH
+from space_shooter.palette import BONE, EMBER, RUST, STEEL
 
 MARGIN = 40
 
@@ -16,8 +17,8 @@ MARGIN = 40
 @cache
 def _player_bullet_image(width: int, height: int) -> pygame.Surface:
     surf = pygame.Surface((width, height), pygame.SRCALPHA)
-    pygame.draw.rect(surf, CYAN, (0, 0, width, height), border_radius=width // 2)
-    pygame.draw.rect(surf, WHITE, (width // 4, 2, max(1, width // 2), height - 4), border_radius=1)
+    pygame.draw.rect(surf, STEEL, (0, 0, width, height), border_radius=width // 2)
+    pygame.draw.rect(surf, BONE, (width // 4, 2, max(1, width // 2), height - 4), border_radius=1)
     return surf
 
 
@@ -26,7 +27,7 @@ def _player_bullet_image(width: int, height: int) -> pygame.Surface:
 def _enemy_bullet_image(radius: int, colour: tuple[int, int, int]) -> pygame.Surface:
     surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
     pygame.draw.circle(surf, colour, (radius, radius), radius)
-    pygame.draw.circle(surf, YELLOW, (radius, radius), max(1, radius // 2))
+    pygame.draw.circle(surf, EMBER if colour == RUST else BONE, (radius, radius), max(1, radius // 2))
     return surf
 
 
@@ -61,7 +62,7 @@ class PlayerBullet(Bullet):
 
 class EnemyBullet(Bullet):
     def __init__(self, pos, vel, damage: int = 20, big: bool = False) -> None:
-        image = _enemy_bullet_image(9 if big else 6, ORANGE if big else RED)
+        image = _enemy_bullet_image(9 if big else 6, EMBER if big else RUST)
         super().__init__(pos, vel, image, damage)
 
 
@@ -69,8 +70,8 @@ class EnemyBullet(Bullet):
 @cache
 def _slug_image() -> pygame.Surface:
     surf = pygame.Surface((10, 14), pygame.SRCALPHA)
-    pygame.draw.ellipse(surf, (140, 62, 40), (0, 0, 10, 14))
-    pygame.draw.ellipse(surf, (255, 122, 40), (3, 2, 4, 8))
+    pygame.draw.ellipse(surf, STEEL, (0, 0, 10, 14))
+    pygame.draw.ellipse(surf, BONE, (3, 2, 4, 8))
     return surf
 
 

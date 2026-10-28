@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 import pygame
 
 from space_shooter import assets
-from space_shooter.config import CYAN, DIM, GREY, WHITE
+from space_shooter.palette import ASH, BONE, STEEL, STEEL_DIM
 
 Anchor = str  # "center", "topleft", "topright", "midtop", "midleft", "midright", "midbottom"
 
@@ -17,7 +17,7 @@ def draw_text(
     text: str,
     size: int,
     pos: tuple[int, int],
-    colour=WHITE,
+    colour=BONE,
     anchor: Anchor = "center",
     shadow: bool = True,
 ) -> pygame.Rect:
@@ -38,7 +38,7 @@ def draw_bar(
     fraction: float,
     colour,
     back=(30, 34, 50),
-    border=GREY,
+    border=STEEL_DIM,
 ) -> None:
     fraction = min(1.0, max(0.0, fraction))
     pygame.draw.rect(surface, back, rect, border_radius=3)
@@ -111,13 +111,13 @@ class MenuList:
         cx = surface.get_width() // 2
         for i, item in enumerate(self.items):
             selected = i == self.index
-            colour = WHITE if selected else GREY
+            colour = BONE if selected else ASH
             y = top + i * spacing
             rect = draw_text(surface, item.text(), size, (cx, y), colour)
             if selected:
                 pulse = 6 + int(3 * abs(pygame.math.Vector2(1, 0).rotate(self.time * 360).x))
-                draw_text(surface, ">", size, (rect.left - 18 - pulse, y), CYAN)
-                draw_text(surface, "<", size, (rect.right + 18 + pulse, y), CYAN)
+                draw_text(surface, ">", size, (rect.left - 18 - pulse, y), STEEL)
+                draw_text(surface, "<", size, (rect.right + 18 + pulse, y), STEEL)
 
 
 def dim_overlay(surface: pygame.Surface, alpha: int = 150) -> None:
@@ -127,4 +127,4 @@ def dim_overlay(surface: pygame.Surface, alpha: int = 150) -> None:
     surface.blit(veil, (0, 0))
 
 
-HINT_COLOUR = DIM
+HINT_COLOUR = STEEL_DIM

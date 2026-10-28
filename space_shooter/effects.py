@@ -7,8 +7,9 @@ import random
 
 import pygame
 
-from space_shooter import assets
-from space_shooter.config import HEIGHT, ORANGE, RED, WHITE, WIDTH, YELLOW
+from space_shooter import assets, procgen
+from space_shooter.config import HEIGHT, WIDTH
+from space_shooter.palette import ASH, BONE, EMBER, RUST
 
 
 class Explosion(pygame.sprite.Sprite):
@@ -16,7 +17,7 @@ class Explosion(pygame.sprite.Sprite):
 
     def __init__(self, center: tuple[float, float], scale: int = 4, frame_time: float = 0.06) -> None:
         super().__init__()
-        self.frames = [assets.load_image(n, scale) for n in assets.SPRITE_NAMES["explode"]]
+        self.frames = procgen.explosion_frames(scale)
         self.frame_time = frame_time
         self.timer = 0.0
         self.index = 0
@@ -78,7 +79,7 @@ def burst(
     group: pygame.sprite.Group,
     pos: tuple[float, float],
     count: int = 12,
-    colours: tuple[tuple[int, int, int], ...] = (YELLOW, ORANGE, RED, WHITE),
+    colours: tuple[tuple[int, int, int], ...] = (EMBER, RUST, ASH),
     speed: float = 220.0,
     life: float = 0.5,
     size: int = 4,
@@ -93,10 +94,18 @@ def burst(
         group.add(Particle(pos, vel, rng.choice(colours), rng.uniform(0.5, 1.0) * life, size))
 
 
+def smoke(group: pygame.sprite.Group, pos, count: int = 4, rng: random.Random | None = None) -> None:
+    """Slow, long-lived ash smoke that lingers after an explosion."""
+    rng = rng or random
+    for _ in range(count):
+        vel = (rng.uniform(-25, 25), rng.uniform(-30, 5))
+        group.add(Particle(pos, vel, ASH, rng.uniform(0.9, 1.4), rng.choice((5, 6, 7))))
+
+
 class FloatingText(pygame.sprite.Sprite):
     """Score popups that drift up and fade."""
 
-    def __init__(self, text: str, pos: tuple[float, float], colour=WHITE, size: int = 22, life: float = 0.8) -> None:
+    def __init__(self, text: str, pos: tuple[float, float], colour=BONE, size: int = 22, life: float = 0.8) -> None:
         super().__init__()
         self.image = assets.font(size).render(text, True, colour)
         self.rect = self.image.get_rect(center=pos)
@@ -118,11 +127,12 @@ class ScreenShake:
 
     def __init__(self, enabled: bool = True) -> None:
         self.enabled = enabled
+        self.cap = 24.0
         self.strength = 0.0
         self.offset = (0, 0)
 
     def add(self, amount: float) -> None:
-        self.strength = min(24.0, self.strength + amount)
+        self.strength = min(self.cap, self.strength + amount)
 
     def update(self, dt: float) -> None:
         if self.strength <= 0.05 or not self.enabled:
@@ -141,10 +151,13 @@ class Flash:
 
     def __init__(self) -> None:
         self.alpha = 0.0
-        self.colour = WHITE
+        self.colour = BONE
+        self.enabled = True
         self.surf = pygame.Surface((WIDTH, HEIGHT))
 
-    def trigger(self, colour=WHITE, alpha: float = 180.0) -> None:
+    def trigger(self, colour=BONE, alpha: float = 180.0) -> None:
+        if not self.enabled:
+            return
         self.colour = colour
         self.alpha = max(self.alpha, alpha)
 

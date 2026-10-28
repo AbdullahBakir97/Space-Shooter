@@ -13,13 +13,13 @@ from space_shooter.scenes.base import Scene
 from space_shooter.ui import dim_overlay, draw_text
 
 INPUT_DELAY = 0.8
-CLOSING_LINES = (
+CLOSING_LINES = (  # indexed by the encounter where the loop ended
     "The ash closes over the wreck.",
-    "Somewhere, the clock winds back.",
     "The shelf remembers you.",
     "The graveyard has room for one more.",
     "The picket line holds. You don't.",
     "The star breathes out. You don't breathe in.",
+    "Somewhere, the clock winds back.",
 )
 
 

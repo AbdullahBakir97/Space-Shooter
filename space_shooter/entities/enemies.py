@@ -8,7 +8,7 @@ import math
 
 import pygame
 
-from space_shooter import assets
+from space_shooter import assets, procgen
 from space_shooter.config import (
     ENEMY_BASE_SPEED,
     ENEMY_BULLET_SPEED,
@@ -16,12 +16,11 @@ from space_shooter.config import (
     ENEMY_SCORE,
     HEIGHT,
     SPRITE_SCALE,
-    WHITE,
     WIDTH,
 )
+from space_shooter.palette import BONE
 
 FLASH_TIME = 0.08
-HUE_SHIFT = {"zigzag": 120.0, "diver": 60.0, "gunner": 250.0}
 
 
 class Enemy(pygame.sprite.Sprite):
@@ -31,7 +30,7 @@ class Enemy(pygame.sprite.Sprite):
     def __init__(self, x: float, hp_mult: float = 1.0, speed_mult: float = 1.0, fire_mult: float = 1.0) -> None:
         super().__init__()
         self.frames = self._load_frames()
-        self.flash_frames = [assets.silhouette(n, WHITE, self.scale) for n in assets.SPRITE_NAMES["enemy"]]
+        self.flash_frames = [assets.silhouette(n, BONE, self.scale) for n in assets.SPRITE_NAMES["enemy"]]
         self.image = self.frames[0]
         self.rect = self.image.get_rect(midbottom=(x, -10))
         self.x, self.y = float(x), float(self.rect.centery)
@@ -46,11 +45,7 @@ class Enemy(pygame.sprite.Sprite):
         self.retreating = False
 
     def _load_frames(self) -> list[pygame.Surface]:
-        names = assets.SPRITE_NAMES["enemy"]
-        shift = HUE_SHIFT.get(self.kind)
-        if shift:
-            return [assets.hue_shifted(n, shift, self.scale) for n in names]
-        return [assets.load_image(n, self.scale) for n in names]
+        return [procgen.scarred_variant(n, self.kind, self.scale) for n in assets.SPRITE_NAMES["enemy"]]
 
     # -- damage --------------------------------------------------------------
     def hit(self, damage: int) -> bool:

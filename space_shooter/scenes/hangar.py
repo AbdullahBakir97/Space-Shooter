@@ -6,7 +6,7 @@ import math
 
 import pygame
 
-from space_shooter import __version__, assets
+from space_shooter import __version__
 from space_shooter.config import HEIGHT, WIDTH
 from space_shooter.echoes import EchoTrace, select_roster
 from space_shooter.palette import ASH, BONE, EMBER, STEEL, STEEL_DIM
@@ -19,7 +19,6 @@ class HangarScene(Scene):
         super().__init__(game)
         self.time = 0.0
         self.notice: str | None = None
-        self.title = assets.silhouette("title", STEEL, 6)
         self.menu = MenuList(
             [
                 MenuItem("LAUNCH", self.launch),
@@ -33,6 +32,7 @@ class HangarScene(Scene):
         )
 
     def on_enter(self) -> None:
+        self.game.audio.set_bed_level(0.12)
         if self.game.save.read_logs:
             return
         opening = self.game.logs.get("a1_open")
@@ -86,9 +86,9 @@ class HangarScene(Scene):
             self.notice, self.game.save.notice = self.game.save.notice, None
         self.game.starfield.draw(surface)
         cx = WIDTH // 2
-        rect = self.title.get_rect(center=(cx, 110 + int(3 * math.sin(self.time))))
-        surface.blit(self.title, rect)
-        draw_text(surface, "LOOP OF ASH", 30, (cx, rect.bottom + 20), EMBER)
+        bob = int(3 * math.sin(self.time))
+        draw_text(surface, "LOOP OF ASH", 84, (cx, 140 + bob), BONE)
+        draw_text(surface, "ACT ONE  -  THE WARDEN", 22, (cx, 192 + bob), EMBER)
         draw_text(surface, f"LOOP {self.game.save.loop}", 26, (24, 24), BONE, "topleft")
         names = self.roster_names()
         draw_text(surface, "ECHOES", 18, (WIDTH - 24, 24), ASH, "topright")

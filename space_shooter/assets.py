@@ -6,7 +6,7 @@ from functools import cache
 
 import pygame
 
-from space_shooter.config import MAGENTA, SPRITE_SCALE
+from space_shooter.config import SPRITE_SCALE
 from space_shooter.paths import IMAGES_DIR, SOUNDS_DIR
 
 SPRITE_NAMES = {
@@ -19,7 +19,7 @@ DIGIT_NAMES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "e
 
 def _placeholder(size: tuple[int, int]) -> pygame.Surface:
     surf = pygame.Surface(size, pygame.SRCALPHA)
-    surf.fill(MAGENTA)
+    surf.fill((255, 0, 255))  # debug placeholder for a missing image
     return surf
 
 
