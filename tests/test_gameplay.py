@@ -1,11 +1,16 @@
 """Headless integration tests that drive the real scenes."""
 
+import random
+
 import pygame
 import pytest
 
-from space_shooter.config import HEIGHT, WIDTH
+from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
+from space_shooter.entities.bullets import EnemyBullet
 from space_shooter.entities.enemies import Drone
+from space_shooter.entities.parts import Drop
 from space_shooter.game import Game
+from space_shooter.salvage import PATCH_HULL, Part
 from space_shooter.scenes.gameover import GameOverScene
 from space_shooter.scenes.gameplay import GameplayScene
 from space_shooter.scenes.menu import MenuScene
@@ -52,7 +57,6 @@ def test_waves_spawn_and_bullets_score(game):
     enemy.y = scene.player.y - 120
     scene.enemies.add(enemy)
     scene.player.fire_cooldown = 0
-    scene.player.invuln_timer = 0
     bullets = scene.player.try_fire()
     scene.player_bullets.add(bullets)
     run_frames(game, 30)
@@ -60,26 +64,79 @@ def test_waves_spawn_and_bullets_score(game):
     assert scene.kills >= 1
 
 
-def test_bomb_clears_regular_enemies(game):
+class AlwaysKnock:
+    """RNG stub: every roll succeeds and choices take the first option."""
+
+    def random(self):
+        return 0.0
+
+    def choice(self, seq):
+        return seq[0]
+
+    def uniform(self, a, b):
+        return a
+
+    def choices(self, population, weights=None):
+        return [population[0]]
+
+
+def test_collecting_drop_attaches_part(game):
     scene = GameplayScene(game, seed=1)
     game.scenes.push(scene)
-    for x in (100, 300, 500):
-        d = Drone(float(x))
-        d.y = 200
-        scene.enemies.add(d)
-    bombs = scene.player.bombs
-    scene.use_bomb()
-    assert scene.player.bombs == bombs - 1
-    assert len(scene.enemies) == 0 and scene.kills == 3
+    scene.drops.add(Drop("turret", (scene.player.x - 30, scene.player.y), vel=(0, 0)))
+    run_frames(game, 2)
+    assert scene.player.loadout.count("turret") == 1 and len(scene.drops) == 0
+
+
+def test_collecting_patch_heals(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    scene.player.health = 50
+    scene.drops.add(Drop("patch", (scene.player.x, scene.player.y), vel=(0, 0)))
+    run_frames(game, 2)
+    assert scene.player.health == 50 + PATCH_HULL
+
+
+def test_replaced_part_is_ejected_as_drop(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    lo = scene.player.loadout
+    lo.attach(Part("slug"), (-14, -30))
+    lo.attach(Part("claw"), (14, -30))
+    scene.drops.add(Drop("slug*", (scene.player.x, scene.player.y - 30), vel=(0, 0)))
+    run_frames(game, 1)
+    codes = [d.code for d in scene.drops]
+    assert codes == ["slug"] and lo.slots["fore_l"].rare
+
+
+def test_knocked_part_becomes_recoverable_drop(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    scene.player.loadout.attach(Part("turret"), (-30, 2))
+    scene.rng = AlwaysKnock()
+    scene.enemy_bullets.add(EnemyBullet((scene.player.x, scene.player.y), (0, 0)))
+    run_frames(game, 1)
+    knocked = [d for d in scene.drops if d.code == "turret"]
+    assert scene.player.loadout.count("turret") == 0 and knocked and knocked[0].lifetime == 6.0
+    assert scene.player.health == PLAYER_MAX_HEALTH
+
+
+def test_tractor_pulls_drops(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    scene.player.loadout.attach(Part("tractor"), (-16, 30))
+    drop = Drop("armour", (scene.player.x + 150, scene.player.y), vel=(0, 0))
+    scene.drops.add(drop)
+    start = drop.x
+    run_frames(game, 10)
+    assert drop.x < start or not drop.alive()
 
 
 def test_game_over_flow_records_high_score(game):
     scene = GameplayScene(game, seed=3)
     game.scenes.push(scene)
     scene.score = 12345
-    scene.player.lives = 1
-    scene.player.invuln_timer = 0
-    scene.player.take_damage(999)
+    scene.player.take_damage(999, random.Random(0))
     run_frames(game, 60 * 4)
     assert isinstance(game.scenes.top, GameOverScene)
     over = game.scenes.top
@@ -101,7 +158,6 @@ def test_long_headless_run_is_stable(game):
     for frame in range(60 * 120):
         top = game.scenes.top
         if isinstance(top, GameplayScene):
-            top.player.invuln_timer = 0
             top.player_bullets.add(top.player.try_fire())
             if frame % 7 == 0:
                 top.player.x = (top.player.x + 40) % WIDTH
