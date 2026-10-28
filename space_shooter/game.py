@@ -8,6 +8,7 @@ from space_shooter import assets
 from space_shooter.audio import AudioManager
 from space_shooter.config import FPS, HEIGHT, MAX_DT, TITLE, WIDTH
 from space_shooter.highscores import HighScoreTable
+from space_shooter.save import load_save, write_save
 from space_shooter.scenes.base import SceneManager
 from space_shooter.settings_store import Settings, load_settings, save_settings
 from space_shooter.starfield import Starfield
@@ -49,6 +50,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.audio = AudioManager(self.settings.sfx_volume)
         self.highscores = HighScoreTable.load()
+        self.save = load_save()
         self.starfield = Starfield()
         self.scenes = SceneManager()
         self.joystick: pygame.joystick.Joystick | None = None
@@ -134,6 +136,11 @@ class Game:
         return False
 
     # -- loop ----------------------------------------------------------------
+    def persist(self) -> None:
+        """Write campaign progress; surface a notice instead of crashing."""
+        if not write_save(self.save):
+            self.save.notice = "Progress could not be saved."
+
     def quit(self) -> None:
         self.running = False
 
