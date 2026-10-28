@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pygame
 
-from space_shooter.config import DIFFICULTIES, DIFFICULTY_ORDER, DIM, HEIGHT, WIDTH
+from space_shooter.config import DIFFICULTIES, DIFFICULTY_ORDER, HEIGHT, WIDTH
+from space_shooter.palette import STEEL_DIM
 from space_shooter.scenes.base import Scene
 from space_shooter.settings_store import save_settings
 from space_shooter.ui import MenuItem, MenuList, draw_text
@@ -80,4 +81,4 @@ class SettingsScene(Scene):
         dim_overlay(surface, 200)
         draw_text(surface, "SETTINGS", 56, (WIDTH // 2, 90))
         self.menu.draw(surface, 170, spacing=46, size=32)
-        draw_text(surface, "LEFT / RIGHT to change   ESC to go back", 20, (WIDTH // 2, HEIGHT - 44), DIM)
+        draw_text(surface, "LEFT / RIGHT to change   ESC to go back", 20, (WIDTH // 2, HEIGHT - 44), STEEL_DIM)

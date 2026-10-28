@@ -19,7 +19,7 @@ from space_shooter.config import (
     WIDTH,
 )
 from space_shooter.echoes import EchoRecorder, EchoTrace, select_roster, store_trace
-from space_shooter.effects import Explosion, Flash, FloatingText, Particle, ScreenShake, burst
+from space_shooter.effects import Explosion, Flash, FloatingText, Particle, ScreenShake, burst, smoke
 from space_shooter.encounters import WARDEN_INDEX, EncounterDirector, Spawn, loop_hull_multiplier
 from space_shooter.entities.bullets import EnemyBullet, SlugBullet
 from space_shooter.entities.echo import Echo
@@ -78,12 +78,16 @@ class GameplayScene(Scene):
         self.banner_timer = 0.0
         self.blackout_timer = 0.0
         self.flare_warning = 0.0
+        self.warning_text: str | None = None
+        self.warning_timer = 0.0
         self.flare_timer = 0.0
         self.hazard_timer = 0.0
         self.first_drop_pending = False
         self.recorder = EchoRecorder(self.loop)
         traces = [EchoTrace.from_data(d) for d in game.save.echoes]
-        self.echoes: pygame.sprite.Group = pygame.sprite.Group(Echo(t) for t in select_roster(traces))
+        roster = select_roster(traces)
+        self.roster = [t.loop for t in roster]
+        self.echoes: pygame.sprite.Group = pygame.sprite.Group(Echo(t) for t in roster)
         self.echo_bullets: pygame.sprite.Group = pygame.sprite.Group()
         self.radio_lines: list[tuple[str, float]] = []
         self.shake = ScreenShake(game.settings.screen_shake)
@@ -147,7 +151,13 @@ class GameplayScene(Scene):
     # -- update --------------------------------------------------------------
     def update(self, dt: float) -> None:
         self.time += dt
+        reduced = self.game.settings.reduced_flashing
         self.shake.enabled = self.game.settings.screen_shake
+        self.shake.cap = 4.0 if reduced else 24.0
+        self.flash.enabled = not reduced
+        self.warning_timer = max(0.0, self.warning_timer - dt)
+        if self.warning_timer <= 0:
+            self.warning_text = None
         self.game.starfield.update(dt)
         self.shake.update(dt)
         self.flash.update(dt)
@@ -292,8 +302,10 @@ class GameplayScene(Scene):
     # -- encounters ----------------------------------------------------------
     def _on_director_event(self, event: str, value) -> None:
         if event == "drift_start":
+            self.game.audio.set_bed_level(0.12)
             self._play_due_log(value)
         elif event == "encounter_start":
+            self.game.audio.set_bed_level(0.25)
             self.recorder.begin_encounter(value)
             self.recorder.note_loadout({})
             self.recorder.note_loadout(self.player.loadout.to_codes())
@@ -315,6 +327,11 @@ class GameplayScene(Scene):
                     hazard.kill()
             self.blackout_timer = 0.0
 
+    def warn(self, text: str, seconds: float) -> None:
+        """Blinking warning line in the cockpit readout."""
+        self.warning_text = text
+        self.warning_timer = seconds
+
     def _play_due_log(self, reached: int) -> None:
         """At most one radio log per drift: the best unread one that is due."""
         entry = self.game.logs.next_log(state_from_save(self.game.save, reached=reached))
@@ -329,14 +346,21 @@ class GameplayScene(Scene):
         if name == "first_drop":
             self.first_drop_pending = True
         elif name == "blackout":
-            self.blackout_timer = BLACKOUT_TIME
+            if self.game.settings.reduced_flashing:
+                self.warn("ASH STORM - VISIBILITY LOW", BLACKOUT_TIME)
+            else:
+                self.blackout_timer = BLACKOUT_TIME
         elif name == "hulk_breach":
             hulks = [h for h in self.hazards if isinstance(h, Hulk)]
             if hulks:
                 hulk = min(hulks, key=lambda h: (h.x - self.player.x) ** 2 + (h.y - self.player.y) ** 2)
                 self._break_hulk(hulk, rare=True)
         elif name == "flare":
-            self.flare_warning = FLARE_WARNING
+            if self.game.settings.reduced_flashing:
+                self.warn("STAR FLARE", FLARE_WARNING + FLARE_TIME)
+            else:
+                self.flare_warning = FLARE_WARNING
+                self.warn("STAR FLARE - GET BEHIND A HULK", FLARE_WARNING)
 
     def _update_hazards(self, dt: float) -> None:
         if self.director.state not in ("active", "clearing"):
@@ -494,7 +518,7 @@ class GameplayScene(Scene):
             burst(self.particles, center, 6, (STEEL, ASH), 160, 0.3, 3, self.rng)
         elif result == "knocked":
             outcome = self.player.last_outcome
-            self.game.audio.play("player_hit")
+            self.game.audio.play("knock")
             if outcome is not None and outcome.part is not None:
                 side = -1 if (outcome.slot or "").endswith("_l") else 1
                 vel = (side * self.rng.uniform(80, 140), self.rng.uniform(-40, 20))
@@ -521,7 +545,8 @@ class GameplayScene(Scene):
         if enemy.is_boss:
             self.boss = None
             self.effects.add(Explosion(center, scale=14, frame_time=0.1))
-            burst(self.particles, center, 70, (EMBER, RUST, ASH), 420, 1.4, 6, self.rng)
+            burst(self.particles, center, 60, (EMBER, RUST, ASH), 420, 1.4, 6, self.rng)
+            smoke(self.particles, center, 24, self.rng)
             self.shake.add(SHAKE_BOSS_DEATH)
             self.flash.trigger(BONE, 200)
             self.game.audio.play("boss_death")
@@ -529,7 +554,8 @@ class GameplayScene(Scene):
                 self._victory()
         else:
             self.effects.add(Explosion(center))
-            burst(self.particles, center, 10, (EMBER, RUST, ASH), rng=self.rng)
+            burst(self.particles, center, 8, (EMBER, RUST, ASH), rng=self.rng)
+            smoke(self.particles, center, 4, self.rng)
             self.shake.add(SHAKE_EXPLOSION)
             self.game.audio.play("explosion")
             self._drop(center)
@@ -611,6 +637,5 @@ class GameplayScene(Scene):
                 draw_text(canvas, "SOMETHING LARGE IS WAKING", 26, (WIDTH // 2, HEIGHT // 2 + 10), EMBER)
         for i, (text, t) in enumerate(reversed(self.radio_lines[-3:])):
             fade = min(1.0, t / 0.6)
-            draw_text(canvas, text, 22, (16, HEIGHT - 24 - i * 22), tuple(int(c * fade) for c in BONE), "midleft")
-        if self.flare_warning > 0 and int(self.time * 6) % 2:
-            draw_text(canvas, "STAR FLARE - GET BEHIND A HULK", 30, (WIDTH // 2, 110), EMBER)
+            colour = tuple(int(c * fade) for c in BONE)
+            draw_text(canvas, text, 22, (WIDTH // 2 + 60, HEIGHT - 28 - i * 22), colour, "midleft")

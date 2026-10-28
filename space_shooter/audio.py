@@ -26,6 +26,9 @@ class AudioManager:
         self._volume = volume
         self._sounds: dict[str, pygame.mixer.Sound | None] = {}
         self._loops: dict[str, pygame.mixer.Channel | None] = {}
+        self.bed_key: str | None = None
+        self.bed_level = 0.12
+        self._bed_channel: pygame.mixer.Channel | None = None
         if self.enabled:
             for key, rel in SOUND_FILES.items():
                 self._sounds[key] = assets.load_sound(key, rel)
@@ -40,6 +43,28 @@ class AudioManager:
         for key, snd in self._sounds.items():
             if snd is not None:
                 snd.set_volume(self._volume * SOUND_VOLUMES.get(key, 1.0))
+        self.set_bed_level(self.bed_level)
+
+    def register(self, key: str, sound: pygame.mixer.Sound | None) -> None:
+        """Add a generated sound under ``key`` (None is accepted and stays silent)."""
+        self._sounds[key] = sound
+        if sound is not None:
+            sound.set_volume(self._volume * SOUND_VOLUMES.get(key, 1.0))
+
+    def start_bed(self, key: str) -> None:
+        """Loop an ambient bed on its own channel."""
+        snd = self._sounds.get(key)
+        self.bed_key = key
+        if snd is None:
+            return
+        if self._bed_channel is None or not self._bed_channel.get_busy():
+            self._bed_channel = snd.play(loops=-1)
+        self.set_bed_level(self.bed_level)
+
+    def set_bed_level(self, level: float) -> None:
+        self.bed_level = level
+        if self._bed_channel is not None:
+            self._bed_channel.set_volume(level * self._volume)
 
     def play(self, key: str) -> None:
         snd = self._sounds.get(key)

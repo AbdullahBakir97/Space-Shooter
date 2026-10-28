@@ -177,3 +177,8 @@ def test_warden_victory_completes_act(game):
     assert isinstance(card, LoopEndScene) and card.result.victory
     assert game.save.act1_complete and "act1_complete" in game.save.flags
     assert load_save().act1_complete and load_save().loop == 2
+
+
+@pytest.mark.parametrize("reached,word", [(0, "ash"), (1, "shelf"), (2, "graveyard"), (3, "picket"), (4, "star")])
+def test_closing_line_matches_where_the_loop_ended(game, reached, word):
+    assert word in LoopEndScene(game, RunResult(1, reached, 0, 1.0)).closing_line.lower()

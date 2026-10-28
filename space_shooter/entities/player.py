@@ -7,7 +7,7 @@ import random
 
 import pygame
 
-from space_shooter import assets
+from space_shooter import procgen
 from space_shooter.config import (
     HEIGHT,
     PLAYER_HIT_INVULN_TIME,
@@ -27,7 +27,7 @@ PLAY_TOP = 60  # keep the ship below the HUD strip
 class Player(pygame.sprite.Sprite):
     def __init__(self) -> None:
         super().__init__()
-        self.frames = assets.load_frames("player")
+        self.frames = procgen.tug_frames()
         self.image = self.frames[0]
         self.rect = self.image.get_rect(midbottom=(WIDTH // 2, HEIGHT - 24))
         self.x = float(self.rect.centerx)

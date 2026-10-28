@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pygame
 
-from space_shooter.config import DIM, HEIGHT, WIDTH
+from space_shooter.config import HEIGHT, WIDTH
+from space_shooter.palette import STEEL_DIM
 from space_shooter.scenes.base import Scene
 from space_shooter.ui import MenuItem, MenuList, dim_overlay, draw_text
 
@@ -58,4 +59,4 @@ class PauseScene(Scene):
         dim_overlay(surface, 160)
         draw_text(surface, "PAUSED", 64, (WIDTH // 2, HEIGHT // 2 - 130))
         self.menu.draw(surface, HEIGHT // 2 - 30)
-        draw_text(surface, "ESC to resume", 20, (WIDTH // 2, HEIGHT - 44), DIM)
+        draw_text(surface, "ESC to resume", 20, (WIDTH // 2, HEIGHT - 44), STEEL_DIM)

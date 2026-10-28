@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pygame
 
-from space_shooter import assets
+from space_shooter import assets, procgen
 from space_shooter.audio import AudioManager
 from space_shooter.config import FPS, HEIGHT, MAX_DT, TITLE, WIDTH
 from space_shooter.save import load_save, write_save
@@ -49,6 +49,9 @@ class Game:
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
         self.audio = AudioManager(self.settings.sfx_volume)
+        self.audio.register("drone", procgen.drone_sound())
+        self.audio.register("static", procgen.static_sound())
+        self.audio.start_bed("drone")
         self.save = load_save()
         logs, notice = load_logs_safe()
         if notice:
