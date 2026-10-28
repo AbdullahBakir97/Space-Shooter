@@ -11,7 +11,6 @@ from space_shooter import procgen
 from space_shooter.config import (
     HEIGHT,
     PLAYER_HIT_INVULN_TIME,
-    PLAYER_INVULN_TIME,
     PLAYER_MAX_HEALTH,
     PLAYER_SPEED,
     WEAPON_COOLDOWN,
@@ -45,10 +44,6 @@ class Player(pygame.sprite.Sprite):
     @property
     def alive_in_world(self) -> bool:
         return not self.dead
-
-    @property
-    def invulnerable(self) -> bool:
-        return self.invuln_timer > 0
 
     def update(self, dt: float, move: tuple[float, float] = (0.0, 0.0)) -> None:
         self.anim_time += dt
@@ -105,6 +100,3 @@ class Player(pygame.sprite.Sprite):
             return
         surface.blit(self.image, self.rect)
         draw_loadout(surface, self.loadout, self.rect.center)
-
-
-PLAYER_SPAWN_INVULN = PLAYER_INVULN_TIME

@@ -28,13 +28,10 @@ KEY_ACTIONS = {
     pygame.K_p: "pause",
     pygame.K_SPACE: "fire",
     pygame.K_z: "fire",
-    pygame.K_x: "bomb",
-    pygame.K_LSHIFT: "bomb",
-    pygame.K_RSHIFT: "bomb",
     pygame.K_F11: "fullscreen",
 }
 # Xbox-style layout, which SDL maps most pads to.
-JOY_BUTTON_ACTIONS = {0: "fire", 1: "bomb", 2: "bomb", 3: "fire", 6: "back", 7: "pause"}
+JOY_BUTTON_ACTIONS = {0: "fire", 1: "back", 3: "fire", 6: "back", 7: "pause"}
 JOY_HAT_ACTIONS = {(0, 1): "up", (0, -1): "down", (-1, 0): "left", (1, 0): "right"}
 AXIS_DEADZONE = 0.3
 

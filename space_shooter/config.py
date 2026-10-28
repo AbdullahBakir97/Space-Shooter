@@ -14,7 +14,6 @@ MAX_DT = 1 / 20  # clamp frame time so a stall never teleports entities
 # --- Player -----------------------------------------------------------------
 PLAYER_SPEED = 380.0  # px/s
 PLAYER_MAX_HEALTH = 100
-PLAYER_INVULN_TIME = 2.0  # seconds after respawn / hit
 PLAYER_HIT_INVULN_TIME = 0.6
 PLAYER_COLLISION_DAMAGE = 35
 PLAYER_BULLET_DAMAGE = 1  # enemy HP is counted in bullet hits
@@ -24,16 +23,11 @@ ENEMY_BULLET_SPEED = 260.0
 
 # --- Enemies ----------------------------------------------------------------
 ENEMY_BASE_SPEED = 120.0
-ENEMY_SCORE = {"drone": 100, "zigzag": 150, "diver": 200, "gunner": 300, "warden": 5000}
+ENEMY_SCORE = {"drone": 100, "zigzag": 150, "diver": 200, "gunner": 300, "warden": 5000}  # salvage value
 ENEMY_HP = {"drone": 1, "zigzag": 2, "diver": 1, "gunner": 3}
 WARDEN_BASE_HP = 160  # hits, before difficulty
-WARDEN_SALVAGE = 5000
 LOOP_HULL_STEP = 0.03  # enemy hull grows 3% per loop...
 LOOP_HULL_CAP = 0.45  # ...up to +45%
-
-# --- Combo ------------------------------------------------------------------
-COMBO_WINDOW = 1.6  # seconds between kills to keep the chain alive
-COMBO_MAX = 8
 
 
 # --- Effects ----------------------------------------------------------------
@@ -50,15 +44,14 @@ class Difficulty:
     name: str
     enemy_speed: float
     enemy_hp: float
-    spawn_rate: float
     enemy_fire_rate: float
     score_mult: float
 
 
 DIFFICULTIES: dict[str, Difficulty] = {
-    "easy": Difficulty("Easy", 0.85, 0.8, 0.8, 0.7, 0.8),
-    "normal": Difficulty("Normal", 1.0, 1.0, 1.0, 1.0, 1.0),
-    "hard": Difficulty("Hard", 1.25, 1.4, 1.3, 1.5, 1.5),
+    "easy": Difficulty("Easy", 0.85, 0.8, 0.7, 0.8),
+    "normal": Difficulty("Normal", 1.0, 1.0, 1.0, 1.0),
+    "hard": Difficulty("Hard", 1.25, 1.4, 1.5, 1.5),
 }
 DIFFICULTY_ORDER = ["easy", "normal", "hard"]
 

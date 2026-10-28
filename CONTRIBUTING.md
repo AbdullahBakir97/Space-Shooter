@@ -23,6 +23,9 @@ Thanks for considering a contribution!
 - Keep code readable; use clear names over clever ones.
 - Match the file's surrounding conventions. Code is formatted with `ruff format`.
 - Gameplay tuning lives in `space_shooter/config.py`; prefer changing a constant there over hard-coding a number.
+- Colours come only from `space_shooter/palette.py`. Keep the palette grim: no bright arcade colours.
+- Story text lives in `space_shooter/data/act1_logs.json`. Logs are at most three lines and use the conditions documented in `space_shooter/story.py`.
+- Rules that can be tested without a window (`save`, `salvage`, `encounters`, `echoes`, `story`) must not import pygame.
 - Keep commit messages concise, in the imperative mood
   (e.g. `Add export option`, not `added export option`).
 

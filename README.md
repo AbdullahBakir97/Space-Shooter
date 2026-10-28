@@ -1,8 +1,9 @@
-# Space Shooter
+# Loop of Ash
 
-A polished arcade shoot-'em-up built with Python and pygame. Fly, dodge, chain
-kills for combo multipliers, collect power-ups, and take down a Dreadnought
-boss every five waves.
+A grim pixel-art shooter built with Python and pygame. You are the last
+salvage pilot of a dead fleet, trapped in a time loop around a dying star.
+Every death resets the loop, and every run you lived through flies again
+beside you as an echo.
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![pygame-ce](https://img.shields.io/badge/pygame--ce-2.5%2B-6aa84f?style=flat-square)
@@ -11,32 +12,51 @@ boss every five waves.
 
 ---
 
-## Features
+## How it plays
 
-**Gameplay**
+**Echoes.** Each run is recorded. On the next loop, up to five of your past
+runs fly with you as translucent ghosts. They follow the path you flew, fire
+when you fired, and carry the parts you had. They deal 60% of your damage and
+take six hits. An echo destroyed in combat is gone from your save for good.
+The ones that reached furthest fly first, so protecting them matters.
 
-- Four-direction movement with auto-fire and four weapon levels (single, twin, spread, quad).
-- Five enemy behaviours: drones, zigzaggers, divers that lunge at you, gunners that park and
-  shoot, and a multi-phase boss whose bullet patterns intensify as its hull fails.
-- Timed waves that grow and unlock new enemy types; a boss every fifth wave.
-- Combo multiplier (up to x8) for chaining kills, bombs that clear the screen, shields,
-  hull repairs and score pickups.
-- Three lives, three difficulty presets, and a persistent top-ten high score table with
-  arcade-style initials entry.
+**Salvage.** Your tug has six hardpoints: two fore, two on the wings, two aft.
+Destroyed enemies drop parts. Fly into one and it bolts onto the nearest free
+slot, and your ship visibly changes shape. Parts do not carry over between
+loops. Every loop is a fresh build.
 
-**Feel**
+| Part | Slots | What it does |
+| --- | --- | --- |
+| Auto-turret | wing, aft | Fires at the nearest enemy in range on its own. |
+| Slug cannon | fore | Fires with your gun: a slow heavy round that hits for 3 and pierces one enemy. |
+| Tractor | aft | Pulls drops toward you and recovers knocked-off parts. |
+| Armour plate | any | Absorbs the next two hits. Enemies aim at it. |
+| Thruster | aft | +15% speed, stacks twice. |
+| Salvage claw | fore | +50% drop chance and more hull patches. |
 
-- Parallax starfield with warp streaks between waves, particle exhaust and debris,
-  explosion animations, screen shake, hit flashes, floating score popups.
-- Low-hull alarm, boss warning klaxon, menu and pause sounds from Juhani Junkala's
-  CC0 retro sound library.
-- Frame-rate independent movement, so the game plays the same on any machine.
+When the hull takes a hit, there is a 35% chance a part is knocked off
+instead. It drifts away for six seconds and you can fly back for it.
+Scarred parts, marked in ember, are 1.5 times as strong.
 
-**Engineering**
+**The loop.** Act 1 is five encounters and a boss, with a quiet drift between
+each one where the radio sometimes speaks.
 
-- Clean package layout with scene stack, data-driven wave design and pure-logic modules.
-- Headless test suite (43 tests) covering waves, scoring, persistence, entities and the
-  full game loop; lint and format checks via `ruff`; CI on Python 3.11 to 3.13.
+| Encounter | What waits there |
+| --- | --- |
+| Cold Wake | Drones. Your first kill always drops a part. |
+| Ash Shelf | Zigzaggers, and ash clouds that hide bullets. Then the lights go out. |
+| Graveyard | Divers among dead hulls that block shots and break open for salvage. |
+| Picket Line | Gunners that hold a line and aim for your armour. |
+| Last Light | Everything at once, falling debris, and a star flare you survive only behind a hulk. |
+| The Warden | The machine that keeps the loop sealed. It learns where your echoes gather. |
+
+The Warden has three phases. It sweeps rotating fans of fire, then hunts the
+densest cluster of your echoes, then collapses into debris rings that expose
+its eye for double damage. Enemy hulls grow 3% each loop, up to 45%.
+
+**The story** is told through twenty short radio logs that unlock as you loop,
+lose echoes and reach new encounters. The hangar keeps an archive of every log
+you have heard.
 
 ## Quick start
 
@@ -49,58 +69,67 @@ pip install -r requirements.txt
 python main.py                   # or: python -m space_shooter
 ```
 
-Requires Python 3.11 or newer. `pip install -e .` also installs a `space-shooter`
-command.
+Requires Python 3.11 or newer. `pip install -e .` also installs a
+`space-shooter` command.
 
 ## Controls
 
-| Action            | Keyboard                 | Gamepad          |
-| ----------------- | ------------------------ | ---------------- |
-| Move              | Arrow keys / WASD        | Left stick / D-pad |
-| Fire (hold)       | Space / Z                | A / Y / RB       |
-| Bomb              | X / Shift                | B / X            |
-| Pause             | Esc / P                  | Start            |
-| Menu confirm/back | Enter / Esc              | A / Back         |
-| Fullscreen        | F11                      |                  |
+| Action | Keyboard | Gamepad |
+| --- | --- | --- |
+| Move | Arrow keys / WASD | Left stick / D-pad |
+| Fire (hold) | Space / Z | A / Y / RB |
+| Pause | Esc / P | Start |
+| Menu confirm / back | Enter / Esc | A / Back |
+| Fullscreen | F11 | |
 
-## How it plays
+Pausing lets you abandon a loop. Abandoning, dying and closing the window
+mid-run all end the loop the same way: the run is kept as an echo and the
+loop counter advances.
 
-- **Waves** spawn enemies over time. Clear everything to advance; a "BOSS NEXT WAVE"
-  banner warns you a wave early.
-- **Combo**: kills within 1.6 s of each other build a chain. Every three chained kills
-  raise the multiplier. The yellow bar under the counter shows how long you have.
-- **Power-ups** drop from destroyed enemies: `W` weapon level, `+` hull repair,
-  `S` eight-second shield, `B` extra bomb, `$` bonus score. Bosses always drop two.
-- **Dying** costs a life and one weapon level; you respawn with a short invulnerability.
-- **Bombs** destroy every regular enemy and bullet on screen and strip a quarter of a
-  boss's hull.
-- **Difficulty** scales enemy speed, hull, spawn rate and fire rate, and multiplies score
-  (Easy x0.8, Normal x1.0, Hard x1.5).
+## Settings
 
-Settings and high scores are stored per user (`~/.local/share/space-shooter` on Linux,
-`~/Library/Application Support/space-shooter` on macOS, `%APPDATA%\space-shooter` on
-Windows). Set `SPACE_SHOOTER_DATA_DIR` to override.
+Sound volume, screen shake, fullscreen, an FPS counter, difficulty, and
+**reduced flashing**. Reduced flashing turns off full-screen flashes, caps
+screen shake, and turns the star flare and the ash blackout into warnings
+only.
+
+Difficulty scales enemy speed, hull and fire rate, and multiplies salvage
+value: Easy x0.8, Normal x1.0, Hard x1.5.
+
+Progress, echoes, story flags, records and settings are stored per user
+(`~/.local/share/space-shooter` on Linux,
+`~/Library/Application Support/space-shooter` on macOS,
+`%APPDATA%\space-shooter` on Windows). Set `SPACE_SHOOTER_DATA_DIR` to
+override. An unreadable save is backed up as `save.json.bak` and a fresh one
+is started.
 
 ## Project layout
 
 ```
-main.py                     launcher
+main.py                      launcher
 space_shooter/
-  game.py                   window, clock, input mapping, main loop
-  config.py                 every tunable constant
-  waves.py                  pure wave/spawn-plan generation
-  combo.py                  kill-chain multiplier
-  highscores.py             top-ten table, JSON persistence
-  settings_store.py         user settings, JSON persistence
-  assets.py / audio.py      cached loading, hue-shifted sprites, sfx with fallback
-  starfield.py / effects.py parallax background, particles, shake, flashes
-  entities/                 player, bullets, enemies (drone, zigzag, diver, gunner, boss), power-ups
-  scenes/                   menu, settings, high scores, gameplay, pause, game over
-  hud.py / ui.py            overlay and menu widgets
-tests/                      headless pytest suite
-images/                     12x16 pixel-art source sprites (drawn at 4x)
-sounds/                     Juhani Junkala's retro SFX collection (CC0)
+  game.py                    window, clock, input mapping, main loop
+  config.py / palette.py     tuning constants and the colour palette
+  save.py                    versioned save, echo packing, records, migration
+  salvage.py                 hardpoints, parts, knock-off and drop rules
+  encounters.py              Act 1 encounters as data and their director
+  echoes.py                  recording, playback, roster rules, cluster targeting
+  story.py                   radio-log conditions and selection
+  data/act1_logs.json        the Act 1 radio logs
+  procgen.py                 generated sprites, cockpit overlay, drone and static audio
+  assets.py / audio.py       cached loading, sound playback with a no-audio fallback
+  starfield.py / effects.py  dying star, ash, parallax, particles, shake, flashes
+  hud.py / ui.py             cockpit readout and menu widgets
+  entities/                  tug, bullets, parts and drops, enemies, the Warden, hazards, echoes
+  scenes/                    hangar, gameplay, log panel, archive, records, settings, pause, loop-end card
+tests/                       headless pytest suite
+images/                      12x16 source sprites
+sounds/                      Juhani Junkala's retro SFX collection (CC0)
+docs/design/            design specs and implementation plans
 ```
+
+The rule modules (`save`, `salvage`, `encounters`, `echoes`, `story`) do not
+import pygame, so they are tested directly without a window.
 
 ## Development
 
@@ -110,20 +139,32 @@ ruff check . && ruff format --check .
 pytest
 ```
 
-The tests run with the SDL dummy video and audio drivers, so they pass on CI runners
-and headless machines. Gameplay tuning lives in `space_shooter/config.py`.
+The suite (193 tests) runs with SDL's dummy video and audio drivers, so it
+passes on CI runners and headless machines. CI runs lint, format and tests on
+Python 3.11 to 3.13.
+
+## Roadmap
+
+Act 1 is the first milestone of a larger campaign:
+
+1. **Strategy map**: a star system where the swarm spreads each turn and you
+   choose where to fight.
+2. **Ground combat**: top-down drops onto planets with a small squad you
+   command.
+3. **The Hive**: a swarm that evolves against how you play, and its queen.
+4. **The Factions**: hail instead of shooting, earn escorts or hunters, and a
+   reputation that survives the loop.
+5. **The Source**: the finale, an endless mode, and save polish.
 
 ## Credits
 
 - Sound effects: *The Essential Retro Video Game Sound Effects Collection* by
   [Juhani Junkala](https://juhanijunkala.com), released under CC0.
-- Pixel art sprites: bundled in `images/`.
+- Source sprites: bundled in `images/`, recoloured and extended in code.
 
 ## Author
 
 **Abdullah Bakir** - [@AbdullahBakir97](https://github.com/AbdullahBakir97)
-
-Full-Stack Developer based in Germany - Python · Django · Vue · Nuxt.
 
 ## License
 
