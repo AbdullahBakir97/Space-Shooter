@@ -6,6 +6,7 @@ import pygame
 import pytest
 
 from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
+from space_shooter.echoes import EchoTrace
 from space_shooter.encounters import DRIFT_TIME, loop_hull_multiplier
 from space_shooter.entities.bullets import EnemyBullet, PlayerBullet
 from space_shooter.entities.enemies import Drone
@@ -13,6 +14,7 @@ from space_shooter.entities.hazards import AshCloud, Debris, Hulk
 from space_shooter.entities.parts import Drop
 from space_shooter.game import Game
 from space_shooter.salvage import PATCH_HULL, SLOT_OFFSETS, Part
+from space_shooter.save import load_save
 from space_shooter.scenes.gameover import GameOverScene
 from space_shooter.scenes.gameplay import GameplayScene
 from space_shooter.scenes.menu import MenuScene
@@ -309,3 +311,61 @@ def test_retreat_removes_enemies(game):
     scene.director.t_rel = scene.director.encounter.time_cap - 0.05  # hit the real time cap
     run_frames(game, 60 * 6)
     assert len(scene.enemies) == 0 and scene.director.index == 1
+
+
+def seeded_trace(loop, encounters=(0,), seconds=20.0, x=400.0, reached=None):
+    samples = []
+    for enc in encounters:
+        for i in range(int(seconds * 20)):
+            samples.append((enc, i / 20, x, 500.0, i % 4 == 0))
+    return EchoTrace(loop, reached if reached is not None else max(encounters), seconds, samples, [])
+
+
+def test_echoes_fly_and_fire(game):
+    game.save.echoes = [seeded_trace(n, x=200.0 + n * 100).to_data() for n in (1, 2, 3)]
+    scene = start_at(game, 0)
+    run_frames(game, 60 * 2)
+    assert len(scene.live_echoes()) == 3
+    assert len(scene.echo_bullets) > 0
+    xs = sorted(round(e.x) for e in scene.live_echoes())
+    assert xs == [300, 400, 500]
+
+
+def test_destroyed_echo_is_removed_from_save(game):
+    game.save.echoes = [seeded_trace(7, x=200.0).to_data(), seeded_trace(8, x=600.0).to_data()]
+    scene = start_at(game, 0)
+    run_frames(game, 10)
+    echo = next(e for e in scene.live_echoes() if e.loop == 7)
+    echo.hp = 1
+    scene.enemy_bullets.add(EnemyBullet((echo.x, echo.y), (0, 0)))
+    run_frames(game, 2)
+    assert not echo.alive()
+    assert [d.loop for d in game.save.echoes] == [8]
+    assert {"first_echo_lost", "echo_lost:7"} <= game.save.flags
+    assert "Echo 7 is gone." in [text for text, _ in scene.radio_lines]
+
+
+def test_echo_without_encounter_data_is_absent(game):
+    game.save.echoes = [seeded_trace(4, encounters=(0,)).to_data()]
+    scene = start_at(game, 1)
+    run_frames(game, 60)
+    assert scene.live_echoes() == []
+
+
+def test_finished_echo_fades_out(game):
+    game.save.echoes = [seeded_trace(5, seconds=1.0, reached=0).to_data()]
+    scene = start_at(game, 0)
+    run_frames(game, 60 * 3)
+    assert scene.live_echoes() == [] and len(scene.echoes) == 0
+    assert [d.loop for d in game.save.echoes] == [5]  # fading is not dying
+
+
+def test_death_stores_trace_and_advances_loop(game):
+    scene = start_at(game, 0)
+    run_frames(game, 60 * 6)
+    scene.player.take_damage(999, random.Random(0))
+    run_frames(game, 2)
+    assert game.save.loop == 2 and len(game.save.echoes) == 1
+    stored = EchoTrace.from_data(game.save.echoes[0])
+    assert stored.loop == 1 and stored.samples and stored.samples[0][0] == 0
+    assert load_save().loop == 2

@@ -17,9 +17,11 @@ from space_shooter.config import (
     SHAKE_HIT,
     WIDTH,
 )
+from space_shooter.echoes import EchoRecorder, EchoTrace, select_roster, store_trace
 from space_shooter.effects import Explosion, Flash, FloatingText, Particle, ScreenShake, burst
 from space_shooter.encounters import WARDEN_INDEX, EncounterDirector, Spawn, loop_hull_multiplier
 from space_shooter.entities.bullets import EnemyBullet, SlugBullet
+from space_shooter.entities.echo import Echo
 from space_shooter.entities.enemies import ENEMY_CLASSES, Enemy
 from space_shooter.entities.hazards import AshCloud, Debris, Hulk
 from space_shooter.entities.parts import Drop, PartRig
@@ -42,6 +44,8 @@ FLARE_WARNING = 1.5
 FLARE_TIME = 2.0
 FLARE_PLAYER_DAMAGE = 30
 FLARE_ENEMY_HITS = 2
+RADIO_TIME = 3.0
+ECHO_RAM_DAMAGE = 2
 ASH_PERIOD = 5.0
 DEBRIS_PERIOD = 1.2
 
@@ -71,6 +75,12 @@ class GameplayScene(Scene):
         self.flare_timer = 0.0
         self.hazard_timer = 0.0
         self.first_drop_pending = False
+        self.recorder = EchoRecorder(self.loop)
+        traces = [EchoTrace.from_data(d) for d in game.save.echoes]
+        self.echoes: pygame.sprite.Group = pygame.sprite.Group(Echo(t) for t in select_roster(traces))
+        self.echo_bullets: pygame.sprite.Group = pygame.sprite.Group()
+        self.radio_lines: list[tuple[str, float]] = []
+        self.loop_ended = False
         self.shake = ScreenShake(game.settings.screen_shake)
         self.flash = Flash()
         self.canvas = pygame.Surface((WIDTH, HEIGHT))
@@ -94,6 +104,19 @@ class GameplayScene(Scene):
                 ox, oy = SLOT_OFFSETS[slot]
                 return (self.player.x + ox, self.player.y + oy)
         return self.player_pos
+
+    def live_echoes(self) -> list[Echo]:
+        return [e for e in self.echoes if e.active]
+
+    def echo_positions(self) -> list[tuple[float, float]]:
+        return [(e.x, e.y) for e in self.live_echoes()]
+
+    def fire_echo_bullets(self, bullets) -> None:
+        self.echo_bullets.add(bullets)
+
+    def radio(self, text: str) -> None:
+        """Show a short radio line at the bottom of the screen."""
+        self.radio_lines.append((text, RADIO_TIME))
 
     def fire_enemy_bullet(self, pos, vel, big: bool = False) -> None:
         self.enemy_bullets.add(EnemyBullet(pos, vel, big=big))
@@ -128,6 +151,7 @@ class GameplayScene(Scene):
         self.hazards.update(dt, self)
         self.banner_timer = max(0.0, self.banner_timer - dt)
         self.blackout_timer = max(0.0, self.blackout_timer - dt)
+        self.radio_lines = [(text, t - dt) for text, t in self.radio_lines if t - dt > 0]
 
         if self.game_over_timer is not None:
             self.game_over_timer -= dt
@@ -145,6 +169,7 @@ class GameplayScene(Scene):
             bullets = self.player.try_fire()
             if bullets:
                 self.player_bullets.add(bullets)
+                self.recorder.note_fire()
                 self.game.audio.play("shoot")
         if self.player.alive_in_world:
             self.player_bullets.add(self.rig.update(dt, self.player.loadout, self.player_pos, self.enemies, 1.0))
@@ -158,6 +183,15 @@ class GameplayScene(Scene):
         self.game.starfield.boost = 2.0 if self.director.state == "drift" else 1.0
         self._update_hazards(dt)
         self._update_flare(dt)
+        in_encounter = self.director.state in ("active", "clearing")
+        if in_encounter and self.player.alive_in_world:
+            self.recorder.sample(self.director.t_rel, self.player.x, self.player.y)
+        for echo in list(self.echoes):
+            if in_encounter:
+                echo.update(dt, self.director.index, self.director.t_rel, self)
+            else:
+                echo.hide()
+        self.echo_bullets.update(dt)
 
         self.enemies.update(dt, self)
         self.player_bullets.update(dt)
@@ -166,6 +200,7 @@ class GameplayScene(Scene):
             self.boss = None
 
         self._collisions()
+        self.recorder.note_loadout(self.player.loadout.to_codes())
 
         if self.player.alive_in_world and self.player.health <= LOW_HEALTH_THRESHOLD:
             self.game.audio.loop("low_health")
@@ -175,6 +210,19 @@ class GameplayScene(Scene):
         if self.player.dead and self.game_over_timer is None:
             self.game_over_timer = GAME_OVER_DELAY
             self.game.audio.stop_all_loops()
+            self.end_loop(victory=False)
+
+    def end_loop(self, victory: bool) -> None:
+        """Close this loop once: keep the run as an echo, advance the loop counter, save."""
+        if self.loop_ended:
+            return
+        self.loop_ended = True
+        save = self.game.save
+        trace = self.recorder.finish(reached=self.director.index, duration=self.time)
+        traces = store_trace([EchoTrace.from_data(d) for d in save.echoes], trace)
+        save.echoes = [t.to_data() for t in traces]
+        save.loop += 1
+        self.game.persist()
 
     def _exhaust(self, dt: float) -> None:
         if not self.player.alive_in_world:
@@ -202,6 +250,9 @@ class GameplayScene(Scene):
     # -- encounters ----------------------------------------------------------
     def _on_director_event(self, event: str, value) -> None:
         if event == "encounter_start":
+            self.recorder.begin_encounter(value)
+            self.recorder.note_loadout({})
+            self.recorder.note_loadout(self.player.loadout.to_codes())
             enc = self.director.encounter
             self.banner_text = enc.name
             self.banner_timer = BANNER_TIME
@@ -303,7 +354,10 @@ class GameplayScene(Scene):
         if blockers:
             pygame.sprite.groupcollide(self.enemy_bullets, pygame.sprite.Group(blockers), True, False)
 
-        hits = pygame.sprite.groupcollide(self.enemies, self.player_bullets, False, False)
+        hits: dict = {}
+        for group in (self.player_bullets, self.echo_bullets):
+            for enemy, bullets in pygame.sprite.groupcollide(self.enemies, group, False, False).items():
+                hits.setdefault(enemy, []).extend(bullets)
         for enemy, bullets in hits.items():
             damage = 0
             for b in bullets:
@@ -317,8 +371,21 @@ class GameplayScene(Scene):
                     b.kill()
                 damage += b.damage
                 self.particles.add(Particle(b.rect.midtop, (0, -60), STEEL, 0.15, 3))
-            if damage and enemy.hit(damage):
+            if damage and enemy.alive() and enemy.hit(damage):
                 self._kill_enemy(enemy)
+
+        for echo in self.live_echoes():
+            shots = pygame.sprite.spritecollide(echo, self.enemy_bullets, True, pygame.sprite.collide_circle)
+            if shots and echo.hit(len(shots)):
+                self._lose_echo(echo)
+            if not echo.alive():
+                continue
+            for enemy in pygame.sprite.spritecollide(echo, self.enemies, False, pygame.sprite.collide_circle):
+                if not enemy.is_boss and enemy.hit(1):
+                    self._kill_enemy(enemy)
+                if echo.hit(ECHO_RAM_DAMAGE):
+                    self._lose_echo(echo)
+                    break
 
         if not self.player.alive_in_world:
             return
@@ -347,6 +414,17 @@ class GameplayScene(Scene):
             if drop.collectable:
                 drop.kill()
                 self._collect(drop)
+
+    def _lose_echo(self, echo: Echo) -> None:
+        """An echo destroyed in combat is gone from the save for good."""
+        echo.kill()
+        save = self.game.save
+        save.echoes = [d for d in save.echoes if d.loop != echo.loop]
+        save.flags |= {"first_echo_lost", f"echo_lost:{echo.loop}"}
+        self.effects.add(Explosion(echo.rect.center, scale=4))
+        burst(self.particles, echo.rect.center, 16, (STEEL, ASH), 220, 0.7, 3, self.rng)
+        self.radio(f"Echo {echo.loop} is gone.")
+        self.game.persist()
 
     def _player_damaged(self, result: str) -> None:
         center = self.player.rect.center
@@ -444,7 +522,10 @@ class GameplayScene(Scene):
             veil = pygame.Surface((WIDTH, HEIGHT))
             veil.set_alpha(217)  # 85 % dark; bullets and ember drawn after stay visible
             canvas.blit(veil, (0, 0))
+        for echo in self.echoes:
+            echo.draw(canvas)
         self.player_bullets.draw(canvas)
+        self.echo_bullets.draw(canvas)
         self.enemy_bullets.draw(canvas)
         for hazard in self.hazards:
             if not isinstance(hazard, Hulk):
@@ -466,5 +547,8 @@ class GameplayScene(Scene):
             draw_text(canvas, self.banner_text, 54, (WIDTH // 2, HEIGHT // 2 - 40), colour)
             if self.director.index == WARDEN_INDEX:
                 draw_text(canvas, "SOMETHING LARGE IS WAKING", 26, (WIDTH // 2, HEIGHT // 2 + 10), EMBER)
+        for i, (text, t) in enumerate(reversed(self.radio_lines[-3:])):
+            fade = min(1.0, t / 0.6)
+            draw_text(canvas, text, 22, (16, HEIGHT - 24 - i * 22), tuple(int(c * fade) for c in BONE), "midleft")
         if self.flare_warning > 0 and int(self.time * 6) % 2:
             draw_text(canvas, "STAR FLARE - GET BEHIND A HULK", 30, (WIDTH // 2, 110), EMBER)
