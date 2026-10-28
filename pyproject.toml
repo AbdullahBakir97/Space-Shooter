@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "space-shooter"
+version = "1.0.0"
+description = "A polished pygame arcade shooter: waves, bosses, combos and power-ups."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Abdullah Bakir" }]
+keywords = ["pygame", "game", "arcade", "shooter"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Games/Entertainment :: Arcade",
+]
+dependencies = ["pygame-ce>=2.5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+space-shooter = "space_shooter.game:main"
+
+[tool.setuptools.packages.find]
+include = ["space_shooter*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["generate_directory_structure.py", "repo_directory_structure.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore:no fast renderer available"]
