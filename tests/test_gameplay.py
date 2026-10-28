@@ -6,11 +6,13 @@ import pygame
 import pytest
 
 from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
-from space_shooter.entities.bullets import EnemyBullet
+from space_shooter.encounters import DRIFT_TIME, loop_hull_multiplier
+from space_shooter.entities.bullets import EnemyBullet, PlayerBullet
 from space_shooter.entities.enemies import Drone
+from space_shooter.entities.hazards import AshCloud, Debris, Hulk
 from space_shooter.entities.parts import Drop
 from space_shooter.game import Game
-from space_shooter.salvage import PATCH_HULL, Part
+from space_shooter.salvage import PATCH_HULL, SLOT_OFFSETS, Part
 from space_shooter.scenes.gameover import GameOverScene
 from space_shooter.scenes.gameplay import GameplayScene
 from space_shooter.scenes.menu import MenuScene
@@ -50,8 +52,8 @@ def test_menu_to_gameplay_and_back(game):
 def test_waves_spawn_and_bullets_score(game):
     scene = GameplayScene(game, seed=42)
     game.scenes.push(scene)
-    run_frames(game, 60 * 4)  # intermission + banner + some spawns
-    assert scene.director.wave == 1 and len(scene.enemies) > 0
+    run_frames(game, int(60 * (DRIFT_TIME + 4)))  # drift, then the first spawns
+    assert scene.director.index == 0 and scene.director.state == "active" and len(scene.enemies) > 0
     # park an enemy right above the player and shoot it
     enemy = Drone(scene.player.x)
     enemy.y = scene.player.y - 120
@@ -164,7 +166,7 @@ def test_long_headless_run_is_stable(game):
         top.update(1 / 60)
         game.scenes.draw(game.screen)
     assert 0 <= scene.player.x <= WIDTH and 0 <= scene.player.y <= HEIGHT
-    assert scene.director.wave >= 2
+    assert scene.director.index >= 1
 
 
 def test_step_handles_quit_event(game):
@@ -172,3 +174,138 @@ def test_step_handles_quit_event(game):
     pygame.event.post(pygame.event.Event(pygame.QUIT))
     game.step(1 / 60)
     assert not game.running
+
+
+def start_at(game, index, seed=1):
+    """Gameplay scene whose director sits at the start of encounter ``index``."""
+    scene = GameplayScene(game, seed=seed)
+    scene.director.index = index
+    game.scenes.push(scene)
+    run_frames(game, int(60 * DRIFT_TIME) + 2)
+    assert scene.director.state in ("active", "clearing") and scene.director.index == index
+    return scene
+
+
+def test_encounter_spawns_after_drift(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    run_frames(game, int(60 * (DRIFT_TIME - 1)))
+    assert scene.director.state == "drift" and len(scene.enemies) == 0
+    run_frames(game, 60 * 4)
+    assert len(scene.enemies) > 0 and scene.banner_text == "COLD WAKE"
+
+
+def test_loop_scaling_caps():
+    assert loop_hull_multiplier(1) == 1.0
+    assert loop_hull_multiplier(5) == pytest.approx(1.12)
+    assert loop_hull_multiplier(30) == pytest.approx(1.45)
+
+
+def test_loop_scaling_applies_to_enemy_hull(game):
+    game.save.loop = 30
+    scene = start_at(game, 2)
+    run_frames(game, 60 * 3)
+    zig = [e for e in scene.enemies if e.kind == "drone"]
+    assert zig and all(e.max_hp >= 1 for e in zig)
+    assert scene.hull_mult == pytest.approx(1.45)
+
+
+def test_aim_point_prefers_armour(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    assert scene.aim_point() == scene.player_pos
+    scene.player.loadout.attach(Part("armour"), (30, 30))
+    ox, oy = SLOT_OFFSETS["aft_r"]
+    assert scene.aim_point() == (scene.player.x + ox, scene.player.y + oy)
+
+
+def test_hulk_blocks_bullets(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    hulk = Hulk((400, 300))
+    scene.hazards.add(hulk)
+    bullet = PlayerBullet((400, 420), (0, -800), 1)
+    scene.player_bullets.add(bullet)
+    enemy_shot = EnemyBullet((400, 180), (0, 300))
+    scene.enemy_bullets.add(enemy_shot)
+    run_frames(game, 30)
+    assert not bullet.alive() and not enemy_shot.alive() and hulk.hp < 8
+
+
+def test_destroyed_hulk_drops_part(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    hulk = Hulk((400, 300), hp=1, rare_drop=True)
+    scene.hazards.add(hulk)
+    scene.player_bullets.add(PlayerBullet((400, 420), (0, -800), 1))
+    run_frames(game, 30)
+    assert not hulk.alive() and any(d.code.endswith("*") for d in scene.drops)
+
+
+def test_graveyard_spawns_hulks_and_breach_drops_rare(game):
+    scene = start_at(game, 2)
+    assert len([h for h in scene.hazards if isinstance(h, Hulk)]) == 4
+    scene.trigger_moment("hulk_breach")
+    assert len([h for h in scene.hazards if isinstance(h, Hulk)]) == 3
+    assert any(d.code.endswith("*") for d in scene.drops)
+
+
+def test_ash_shelf_drifts_ash_clouds(game):
+    scene = start_at(game, 1)
+    run_frames(game, 60 * 6)
+    assert any(isinstance(h, AshCloud) for h in scene.hazards)
+
+
+def test_last_light_rains_debris_that_hurts(game):
+    scene = start_at(game, 4)
+    run_frames(game, 60 * 3)
+    assert any(isinstance(h, Debris) for h in scene.hazards)
+    rock = Debris((scene.player.x, scene.player.y), (0, 0))
+    scene.hazards.add(rock)
+    run_frames(game, 1)
+    assert scene.player.health < PLAYER_MAX_HEALTH and not rock.alive()
+
+
+def test_first_kill_of_cold_wake_always_drops_part(game):
+    scene = start_at(game, 0)
+    enemy = Drone(scene.player.x)
+    enemy.y = scene.player.y - 150
+    scene.enemies.add(enemy)
+    scene.rng = random.Random(123)
+    scene.drops.empty()
+    scene._kill_enemy(enemy)
+    assert [d.code for d in scene.drops] and scene.drops.sprites()[0].code != "patch"
+
+
+def test_blackout_moment(game):
+    scene = start_at(game, 1)
+    scene.trigger_moment("blackout")
+    assert scene.blackout_timer == pytest.approx(4.0)
+    run_frames(game, 60 * 5)
+    assert scene.blackout_timer == 0
+
+
+def test_flare_hurts_unshadowed_player(game):
+    scene = start_at(game, 4)
+    scene.trigger_moment("flare")
+    run_frames(game, int(60 * 1.4))
+    assert scene.player.health == PLAYER_MAX_HEALTH  # still the warning
+    run_frames(game, 60)
+    assert scene.player.health == PLAYER_MAX_HEALTH - 30
+
+
+def test_flare_spares_player_behind_hulk(game):
+    scene = start_at(game, 4)
+    scene.hazards.add(Hulk((scene.player.x, scene.player.y - 160)))
+    scene.trigger_moment("flare")
+    run_frames(game, 60 * 3)
+    assert scene.player.health == PLAYER_MAX_HEALTH
+
+
+def test_retreat_removes_enemies(game):
+    scene = start_at(game, 0)
+    run_frames(game, 60 * 3)
+    assert len(scene.enemies) > 0
+    scene.director.t_rel = scene.director.encounter.time_cap - 0.05  # hit the real time cap
+    run_frames(game, 60 * 6)
+    assert len(scene.enemies) == 0 and scene.director.index == 1

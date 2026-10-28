@@ -5,7 +5,7 @@ from __future__ import annotations
 import pygame
 
 from space_shooter.config import LOW_HEALTH_THRESHOLD, PLAYER_MAX_HEALTH, WIDTH
-from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL, STEEL_DIM
+from space_shooter.palette import ASH, EMBER, RUST, STEEL, STEEL_DIM
 from space_shooter.salvage import SLOTS
 from space_shooter.ui import draw_bar, draw_text
 
@@ -16,7 +16,7 @@ def draw_hud(surface: pygame.Surface, scene) -> None:
     strip.fill((0, 0, 0, 120))
     surface.blit(strip, (0, 0))
 
-    draw_text(surface, f"WAVE {scene.director.wave}", 26, (WIDTH // 2, 10), BONE, "midtop")
+    draw_text(surface, scene.director.encounter.name, 22, (WIDTH // 2, 12), ASH, "midtop")
 
     bar = pygame.Rect(WIDTH - 216, 10, 200, 14)
     low = player.health <= LOW_HEALTH_THRESHOLD

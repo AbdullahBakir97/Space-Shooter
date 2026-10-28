@@ -41,9 +41,8 @@ ENEMY_BASE_SPEED = 120.0
 ENEMY_SCORE = {"drone": 100, "zigzag": 150, "diver": 200, "gunner": 300, "boss": 5000}
 ENEMY_HP = {"drone": 1, "zigzag": 2, "diver": 1, "gunner": 3}
 BOSS_BASE_HP = 110  # hits; grows 50% per boss
-BOSS_EVERY = 5  # a boss wave every N waves
-WAVE_INTERMISSION = 2.0
-WAVE_START_DELAY = 1.5
+LOOP_HULL_STEP = 0.03  # enemy hull grows 3% per loop...
+LOOP_HULL_CAP = 0.45  # ...up to +45%
 
 # --- Combo ------------------------------------------------------------------
 COMBO_WINDOW = 1.6  # seconds between kills to keep the chain alive
