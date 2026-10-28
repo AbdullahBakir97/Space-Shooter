@@ -34,7 +34,8 @@ def draw_hud(surface: pygame.Surface, scene) -> None:
     boss = scene.boss
     if boss is not None and boss.alive():
         rect = pygame.Rect(WIDTH // 2 - 200, 70, 400, 10)
-        draw_bar(surface, rect, boss.hp / boss.max_hp, RUST, border=STEEL_DIM)
+        draw_bar(surface, rect, boss.hp / boss.max_hp, EMBER if boss.eye_exposed else RUST, border=STEEL_DIM)
+        draw_text(surface, "THE WARDEN", 18, (WIDTH // 2, 86), ASH, "midtop")
 
     if scene.game.settings.show_fps:
         draw_text(surface, f"{scene.game.fps:.0f} FPS", 16, (WIDTH - 8, surface.get_height() - 4), ASH, "bottomright")

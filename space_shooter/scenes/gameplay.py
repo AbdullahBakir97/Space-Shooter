@@ -7,6 +7,7 @@ import random
 
 import pygame
 
+from space_shooter import procgen
 from space_shooter.config import (
     DIFFICULTIES,
     HEIGHT,
@@ -211,6 +212,32 @@ class GameplayScene(Scene):
             self.game.audio.stop_all_loops()
             self.end_loop(victory=False)
 
+    def _victory(self) -> None:
+        """The Warden falls: Act 1 is complete. Play the ending logs, then the card."""
+        save = self.game.save
+        save.flags.add("act1_complete")
+        save.act1_complete = True
+        tone = getattr(procgen, "tone", None)
+        sound = tone(55.0, 2.5) if tone else None
+        if sound is not None:
+            sound.play()
+        result = self.end_loop(victory=True)
+        self.death_timer = float("inf")  # freeze the field behind the ending
+        from space_shooter.scenes.loop_end import LoopEndScene
+
+        def show(ids: list[str]) -> None:
+            while ids and self.game.logs.get(ids[0]) is None:
+                ids = ids[1:]
+            if not ids:
+                self.game.scenes.push(LoopEndScene(self.game, result))
+                return
+            entry = self.game.logs.get(ids[0])
+            self.game.logs.mark_read(entry.id)
+            self.game.persist()
+            self.game.scenes.push(LogPanel(self.game, entry, on_close=lambda: show(ids[1:])))
+
+        show(["a1_end_1", "a1_end_2", "a1_end_3"])
+
     def _death_beat(self, dt: float) -> None:
         """Slow motion over the wreck, then the loop-end card."""
         slow = dt * DEATH_TIME_SCALE
@@ -351,12 +378,19 @@ class GameplayScene(Scene):
             speed_mult=self.difficulty.enemy_speed,
             fire_mult=self.difficulty.enemy_fire_rate,
         )
-        if spawn.kind == "warden":  # placeholder until the Warden itself lands
-            enemy = ENEMY_CLASSES["boss"](x, wave=5, **kwargs)
+        enemy = ENEMY_CLASSES[spawn.kind](x, **kwargs)
+        if spawn.kind == "warden":
             self.boss = enemy
-        else:
-            enemy = ENEMY_CLASSES[spawn.kind](x, **kwargs)
+            self.game.save.flags.add("warden_seen")
+            self.game.persist()
         self.enemies.add(enemy)
+
+    def spawn_debris_ring(self, center: tuple[float, float], count: int) -> None:
+        """Wreckage thrown out in a ring (the Warden's collapse phase)."""
+        for i in range(count):
+            angle = math.tau * i / count
+            vel = (math.cos(angle) * 170, math.sin(angle) * 170)
+            self.hazards.add(Debris(center, vel, seed=i))
 
     def _break_hulk(self, hulk: Hulk, rare: bool) -> None:
         hulk.kill()
@@ -491,7 +525,8 @@ class GameplayScene(Scene):
             self.shake.add(SHAKE_BOSS_DEATH)
             self.flash.trigger(BONE, 200)
             self.game.audio.play("boss_death")
-            self._drop(center, force=True, rare=True)
+            if enemy.kind == "warden":
+                self._victory()
         else:
             self.effects.add(Explosion(center))
             burst(self.particles, center, 10, (EMBER, RUST, ASH), rng=self.rng)

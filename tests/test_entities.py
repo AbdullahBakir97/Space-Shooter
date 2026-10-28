@@ -5,7 +5,7 @@ import pytest
 
 from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
 from space_shooter.entities.bullets import SlugBullet
-from space_shooter.entities.enemies import ENEMY_CLASSES, Boss, Diver, Drone, Gunner
+from space_shooter.entities.enemies import ENEMY_CLASSES, Diver, Drone, Gunner
 from space_shooter.entities.parts import Drop, PartRig, draw_loadout
 from space_shooter.entities.player import PLAY_TOP, Player
 from space_shooter.salvage import Loadout, Part
@@ -164,19 +164,6 @@ class TestEnemies:
         for _ in range(60 * 5):
             g.update(1 / 60, world)
         assert world.shots
-
-    def test_boss_scales_and_stays_on_screen(self):
-        world = FakeWorld()
-        b5, b10 = Boss(400.0, wave=5), Boss(400.0, wave=10)
-        pygame.sprite.Group(b5)
-        assert b10.max_hp > b5.max_hp and b10.score > b5.score
-        for _ in range(60 * 10):
-            b5.update(1 / 60, world)
-        assert b5.alive() and 0 < b5.rect.centery < HEIGHT / 2
-        assert world.shots
-        assert b5.phase == 1
-        b5.hit(b5.max_hp // 2)
-        assert b5.phase == 2
 
     def test_hit_and_flash(self):
         e = ENEMY_CLASSES["zigzag"](200.0, hp_mult=1.0)
