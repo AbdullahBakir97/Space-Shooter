@@ -23,3 +23,8 @@ def test_values_are_clamped_and_unknown_keys_ignored(tmp_path: Path):
 def test_corrupt_file(tmp_path: Path):
     (tmp_path / "settings.json").write_text("[1,2")
     assert load_settings(tmp_path) == Settings()
+
+
+def test_reduced_flashing_round_trip(tmp_path: Path):
+    save_settings(Settings(reduced_flashing=True), tmp_path)
+    assert load_settings(tmp_path).reduced_flashing is True

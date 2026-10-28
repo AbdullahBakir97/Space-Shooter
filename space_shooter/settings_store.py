@@ -19,6 +19,7 @@ class Settings:
     difficulty: str = "normal"
     fullscreen: bool = False
     show_fps: bool = False
+    reduced_flashing: bool = False
 
     def normalised(self) -> Settings:
         """Return a copy with every field clamped to a valid value."""
@@ -28,6 +29,7 @@ class Settings:
             difficulty=self.difficulty if self.difficulty in DIFFICULTY_ORDER else "normal",
             fullscreen=bool(self.fullscreen),
             show_fps=bool(self.show_fps),
+            reduced_flashing=bool(self.reduced_flashing),
         )
 
 
