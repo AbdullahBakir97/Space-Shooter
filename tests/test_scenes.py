@@ -152,3 +152,28 @@ def test_loop_end_card_victory_text(game):
     game.scenes.draw(game.screen)
     assert card.title == "THE WARDEN IS SILENT"
     assert LoopEndScene(game, RunResult(2, 1, 0, 30.0, [], False)).title == "LOOP 2"
+
+
+def test_warden_victory_completes_act(game):
+    from space_shooter.encounters import WARDEN_INDEX
+    from space_shooter.entities.bullets import PlayerBullet
+
+    for log in game.logs.logs:
+        if not log.id.startswith("a1_end"):
+            game.logs.mark_read(log.id)
+    scene = start_run(game, encounter=WARDEN_INDEX, keep_logs=True)
+    warden = scene.boss
+    assert warden is not None and warden.kind == "warden" and "warden_seen" in game.save.flags
+    warden.hp = 1
+    warden.y = warden.target_y  # skip its entrance so the shot lands on screen
+    warden.rect.center = (round(warden.x), round(warden.y))
+    scene.player_bullets.add(PlayerBullet(warden.rect.center, (0, 0), 1))
+    run_frames(game, 1)
+    for log_id in ("a1_end_1", "a1_end_2", "a1_end_3"):
+        assert isinstance(game.scenes.top, LogPanel) and game.scenes.top.entry.id == log_id
+        press(game, "confirm")
+        press(game, "confirm")
+    card = game.scenes.top
+    assert isinstance(card, LoopEndScene) and card.result.victory
+    assert game.save.act1_complete and "act1_complete" in game.save.flags
+    assert load_save().act1_complete and load_save().loop == 2

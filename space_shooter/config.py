@@ -38,9 +38,10 @@ ENEMY_BULLET_SPEED = 260.0
 
 # --- Enemies ----------------------------------------------------------------
 ENEMY_BASE_SPEED = 120.0
-ENEMY_SCORE = {"drone": 100, "zigzag": 150, "diver": 200, "gunner": 300, "boss": 5000}
+ENEMY_SCORE = {"drone": 100, "zigzag": 150, "diver": 200, "gunner": 300, "warden": 5000}
 ENEMY_HP = {"drone": 1, "zigzag": 2, "diver": 1, "gunner": 3}
-BOSS_BASE_HP = 110  # hits; grows 50% per boss
+WARDEN_BASE_HP = 160  # hits, before difficulty
+WARDEN_SALVAGE = 5000
 LOOP_HULL_STEP = 0.03  # enemy hull grows 3% per loop...
 LOOP_HULL_CAP = 0.45  # ...up to +45%
 
