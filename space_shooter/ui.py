@@ -125,6 +125,3 @@ def dim_overlay(surface: pygame.Surface, alpha: int = 150) -> None:
     veil.fill((0, 0, 0))
     veil.set_alpha(alpha)
     surface.blit(veil, (0, 0))
-
-
-HINT_COLOUR = STEEL_DIM

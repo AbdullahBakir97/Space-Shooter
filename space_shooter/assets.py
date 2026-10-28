@@ -41,31 +41,6 @@ def load_image(name: str, scale: int = SPRITE_SCALE) -> pygame.Surface:
     return raw
 
 
-def load_frames(key: str, scale: int = SPRITE_SCALE) -> list[pygame.Surface]:
-    return [load_image(n, scale) for n in SPRITE_NAMES[key]]
-
-
-@cache
-def hue_shifted(name: str, degrees: float, scale: int = SPRITE_SCALE) -> pygame.Surface:
-    """A copy of a sprite with every pixel's hue rotated by ``degrees``.
-
-    Rotating hue keeps the pixel art's shading intact, unlike a multiply tint.
-    The work is done on the unscaled 12x16 source, so it is cheap.
-    """
-    small = load_image(name, 1).copy()
-    width, height = small.get_size()
-    for x in range(width):
-        for y in range(height):
-            colour = small.get_at((x, y))
-            if colour.a == 0:
-                continue
-            h, sat, val, a = colour.hsva
-            shifted = pygame.Color(0)
-            shifted.hsva = ((h + degrees) % 360, sat, val, a)
-            small.set_at((x, y), shifted)
-    return pygame.transform.scale_by(small, scale) if scale != 1 else small
-
-
 @cache
 def silhouette(name: str, colour: tuple[int, int, int], scale: int = SPRITE_SCALE) -> pygame.Surface:
     """A flat-colour version of a sprite (used for hit flashes)."""
@@ -90,7 +65,7 @@ def register_cache(fn):
 
 def clear_caches() -> None:
     """Drop cached surfaces/fonts; required after pygame is re-initialised."""
-    for fn in (load_image, hue_shifted, silhouette, font, load_sound, *_EXTRA_CACHES):
+    for fn in (load_image, silhouette, font, load_sound, *_EXTRA_CACHES):
         fn.cache_clear()
 
 
