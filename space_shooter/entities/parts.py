@@ -8,13 +8,32 @@ import pygame
 
 from space_shooter import procgen
 from space_shooter.config import BULLET_SPEED, HEIGHT, PLAYER_BULLET_DAMAGE
-from space_shooter.entities.bullets import Bullet, PlayerBullet
+from space_shooter.entities.bullets import Bullet, PlayerBullet, SlugBullet
 from space_shooter.salvage import SLOT_OFFSETS, Loadout
 
+SLUG_SPEED = 520.0
+SLUG_DAMAGE = 3
+SLUG_DAMAGE_RARE = 5
 TURRET_RANGE = 260.0
 TURRET_PERIOD = 0.5
 TURRET_PERIOD_RARE = 0.33
 BLINK_TIME = 2.0
+
+
+def scaled(damage: int, mult: float) -> int:
+    """Damage after a multiplier, rounded up, never below 1."""
+    return max(1, math.ceil(damage * mult - 1e-9))
+
+
+def gun_volley(x: float, top: float, loadout: Loadout, damage_mult: float = 1.0) -> list[Bullet]:
+    """One trigger pull: the fixed main gun plus every slug cannon on the hull."""
+    bullets: list[Bullet] = [PlayerBullet((x, top + 6), (0, -BULLET_SPEED), scaled(PLAYER_BULLET_DAMAGE, damage_mult))]
+    for slot, part in loadout.parts():
+        if part.kind == "slug":
+            side = -1 if slot.endswith("_l") else 1
+            damage = scaled(SLUG_DAMAGE_RARE if part.rare else SLUG_DAMAGE, damage_mult)
+            bullets.append(SlugBullet((x + side * 14, top), (0, -SLUG_SPEED), damage))
+    return bullets
 
 
 class Drop(pygame.sprite.Sprite):
@@ -94,7 +113,7 @@ class PartRig:
                 continue
             angle = math.atan2(target.y - sy, target.x - sx)
             speed = BULLET_SPEED * 0.8
-            damage = max(1, round(PLAYER_BULLET_DAMAGE * damage_mult))
+            damage = scaled(PLAYER_BULLET_DAMAGE, damage_mult)
             shots.append(PlayerBullet((sx, sy), (math.cos(angle) * speed, math.sin(angle) * speed), damage))
             self.cooldowns[slot] = TURRET_PERIOD_RARE if part.rare else TURRET_PERIOD
         return shots
