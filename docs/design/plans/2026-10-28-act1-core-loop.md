@@ -62,6 +62,7 @@ def test_pack_round_trip():
     assert [(e, f) for e, _, _, _, f in back] == [(0, False), (2, True)]
     assert [v for row in back for v in row[1:4]] == pytest.approx([v for row in s for v in row[1:4]], abs=1e-4)
 
+
 def test_round_trip(tmp_path):
     d = SaveData(loop=4, flags={"warden_seen"}, read_logs=["a1_open"])
     d.echoes.append(EchoData(3, 2, 64.0, pack_samples([(0, 0.0, 1, 2, True)]), []))
@@ -69,33 +70,44 @@ def test_round_trip(tmp_path):
     back = load_save(tmp_path)
     assert back.loop == 4 and back.flags == {"warden_seen"} and back.echoes[0].loop == 3
 
+
 def test_fresh_when_missing(tmp_path):
     assert load_save(tmp_path).loop == 1
 
+
 def test_migrates_high_scores(tmp_path):
-    (tmp_path / "high_scores.json").write_text('[{"name":"ZED","score":900,"wave":3,"difficulty":"hard","timestamp":0}]')
+    (tmp_path / "high_scores.json").write_text(
+        '[{"name":"ZED","score":900,"wave":3,"difficulty":"hard","timestamp":0}]'
+    )
     d = load_save(tmp_path)
     assert d.records == [Record(loop=0, reached=0, salvage=900, time=0.0, difficulty="hard")]
+
 
 def test_corrupt_is_backed_up(tmp_path):
     (tmp_path / "save.json").write_text("{nope")
     d = load_save(tmp_path)
     assert d.loop == 1 and d.notice and (tmp_path / "save.json.bak").exists()
 
+
 def test_newer_version_is_backed_up(tmp_path):
     (tmp_path / "save.json").write_text('{"version": 99}')
     assert load_save(tmp_path).notice and (tmp_path / "save.json.bak").exists()
 
+
 def test_unwritable_directory_returns_false(tmp_path):
-    target = tmp_path / "file"; target.write_text("x")   # a file, not a directory
+    target = tmp_path / "file"
+    target.write_text("x")  # a file, not a directory
     assert write_save(SaveData(), target) is False
+
 
 def test_records_order_and_limit():
     d = SaveData()
     for i in range(12):
         add_record(d, Record(loop=i, reached=i % 6, salvage=i * 10, time=1.0))
     assert len(d.records) == 10
-    assert [(r.reached, r.salvage) for r in d.records] == sorted(((r.reached, r.salvage) for r in d.records), reverse=True)
+    assert [(r.reached, r.salvage) for r in d.records] == sorted(
+        ((r.reached, r.salvage) for r in d.records), reverse=True
+    )
 ```
 
 Add to `tests/test_settings.py`: `Settings(reduced_flashing=True)` round-trips through save/load.
@@ -147,48 +159,67 @@ def test_slot_validity():
     with pytest.raises(ValueError):
         Loadout().attach(Part("unknown"), (0, 0))
 
+
 def test_closest_free_valid_slot():
-    lo = Loadout(); lo.attach(Part("armour"), (30, 30))
+    lo = Loadout()
+    lo.attach(Part("armour"), (30, 30))
     assert lo.slots["aft_r"].kind == "armour"
+
 
 def test_full_valid_slots_replace_oldest_and_eject():
     lo = Loadout()
-    lo.attach(Part("slug"), (-14, -30)); lo.attach(Part("claw"), (14, -30))
+    lo.attach(Part("slug"), (-14, -30))
+    lo.attach(Part("claw"), (14, -30))
     slot, ejected = lo.attach(Part("slug", rare=True), (14, -30))
     assert ejected.kind == "slug" and slot == "fore_l"
 
+
 def test_armour_absorbs_before_knock():
-    lo = Loadout(); lo.attach(Part("armour"), (0, 0)); lo.attach(Part("turret"), (-30, 2))
+    lo = Loadout()
+    lo.attach(Part("armour"), (0, 0))
+    lo.attach(Part("turret"), (-30, 2))
     rng = random.Random(0)
     assert [lo.absorb_hit(rng).kind for _ in range(2)] == ["armour", "armour"]
-    assert lo.count("armour") == 0   # plate destroyed after 2 hits
+    assert lo.count("armour") == 0  # plate destroyed after 2 hits
+
 
 def test_knock_rate_close_to_35_percent():
-    rng = random.Random(1); knocked = 0
+    rng = random.Random(1)
+    knocked = 0
     for _ in range(2000):
-        lo = Loadout(); lo.attach(Part("turret"), (-30, 2))
+        lo = Loadout()
+        lo.attach(Part("turret"), (-30, 2))
         knocked += lo.absorb_hit(rng).kind == "knocked"
     assert 0.31 < knocked / 2000 < 0.39
+
 
 def test_empty_loadout_always_hull():
     assert Loadout().absorb_hit(random.Random(0)).kind == "hull"
 
+
 def test_thruster_caps_at_two():
-    lo = Loadout(); lo.attach(Part("thruster"), (-16, 30)); lo.attach(Part("thruster"), (16, 30))
+    lo = Loadout()
+    lo.attach(Part("thruster"), (-16, 30))
+    lo.attach(Part("thruster"), (16, 30))
     assert lo.speed_multiplier() == pytest.approx(1.30)
 
+
 def test_claw_raises_drop_chance_and_patch_share():
-    lo = Loadout(); lo.attach(Part("claw"), (14, -30))
+    lo = Loadout()
+    lo.attach(Part("claw"), (14, -30))
     assert lo.drop_chance(DROP_BASE) == pytest.approx(0.27)
     assert lo.patch_share() == pytest.approx(0.35)
+
 
 def test_roll_drop_distribution():
     rng = random.Random(4)
     results = [roll_drop(rng, 1.0) for _ in range(5000)]
     assert 0.17 < results.count("patch") / 5000 < 0.23 and None not in results
 
+
 def test_codes_round_trip_ignores_unknown():
-    lo = Loadout(); lo.attach(Part("turret", rare=True), (-30, 2))
+    lo = Loadout()
+    lo.attach(Part("turret", rare=True), (-30, 2))
     assert Loadout.from_codes(lo.to_codes() | {"aft_l": "laser"}).to_codes() == lo.to_codes()
 ```
 
@@ -248,18 +279,22 @@ Moments: `first_drop` makes the first kill of encounter 0 always drop a part. `b
 def test_six_encounters_warden_last():
     assert len(ENCOUNTERS) == 6 and ENCOUNTERS[WARDEN_INDEX].script[0].kind == "warden"
 
+
 @pytest.mark.parametrize("idx,total", [(0, 18), (1, 24), (2, 28), (3, 32), (4, 40)])
 def test_script_totals(idx, total):
     assert sum(len(expand(e, random.Random(0))) for e in ENCOUNTERS[idx].script) == total
+
 
 def test_patterns_positions_in_range_and_ordered():
     for p in ("line", "vee", "column", "pincer", "scatter", "single"):
         spawns = expand(SpawnEntry(2.0, p, "drone", 5 if p != "single" else 1, 0.5), random.Random(1))
         assert all(0.0 <= s.x_frac <= 1.0 and s.at >= 2.0 for s in spawns)
 
+
 def test_pincer_uses_both_edges():
     xs = {s.x_frac < 0.5 for s in expand(SpawnEntry(0, "pincer", "drone", 4, 0.5), random.Random(0))}
     assert xs == {True, False}
+
 
 def test_director_flow_drift_active_clear():
     d = EncounterDirector(random.Random(0))
@@ -267,21 +302,32 @@ def test_director_flow_drift_active_clear():
     d.update(DRIFT_TIME + 0.01, 0)
     assert d.state == "active" and ("encounter_start", 0) in d.drain_events()
 
+
 def test_time_cap_emits_retreat():
-    d = EncounterDirector(random.Random(0)); d.update(DRIFT_TIME + 0.01, 0)
-    for _ in range(61 * 10): d.update(0.1, 5)
+    d = EncounterDirector(random.Random(0))
+    d.update(DRIFT_TIME + 0.01, 0)
+    for _ in range(61 * 10):
+        d.update(0.1, 5)
     assert ("retreat", 0) in d.drain_events()
 
+
 def test_completing_warden_emits_act_complete():
-    d = EncounterDirector(random.Random(0)); d.index = WARDEN_INDEX
-    d.update(DRIFT_TIME + 0.01, 0); d.update(0.1, 1); d.update(0.1, 0)
+    d = EncounterDirector(random.Random(0))
+    d.index = WARDEN_INDEX
+    d.update(DRIFT_TIME + 0.01, 0)
+    d.update(0.1, 1)
+    d.update(0.1, 0)
     assert ("act_complete", None) in d.drain_events() and d.state == "complete"
 
+
 def test_moment_fires_once():
-    d = EncounterDirector(random.Random(0)); d.index = 1
+    d = EncounterDirector(random.Random(0))
+    d.index = 1
     d.update(DRIFT_TIME + 0.01, 0)
     events = []
-    for _ in range(300): d.update(0.1, 3); events += d.drain_events()
+    for _ in range(300):
+        d.update(0.1, 3)
+        events += d.drain_events()
     assert events.count(("moment", "blackout")) == 1
 ```
 
@@ -324,47 +370,59 @@ Add to `tests/test_gameplay.py`: `test_encounter_spawns_after_drift`, `test_hulk
 
 ```python
 def test_recorder_samples_at_20hz_and_marks_fire():
-    r = EchoRecorder(loop=3); r.begin_encounter(0)
+    r = EchoRecorder(loop=3)
+    r.begin_encounter(0)
     for i in range(61):
-        if i == 10: r.note_fire()
+        if i == 10:
+            r.note_fire()
         r.sample(i / 60, 100 + i, 200)
     t = r.finish(reached=0, duration=1.0)
     assert len(t.samples) == 21 and sum(s[4] for s in t.samples) == 1
 
+
 def test_playback_interpolates_and_reports_fire_once():
     t = EchoTrace(1, 0, 1.0, [(0, 0.0, 0, 0, False), (0, 0.05, 10, 0, True), (0, 0.1, 20, 0, False)], [])
     p = EchoPlayback(t)
-    s = p.advance(0, 0.025); assert s.x == pytest.approx(5) and not s.fired
+    s = p.advance(0, 0.025)
+    assert s.x == pytest.approx(5) and not s.fired
     assert p.advance(0, 0.06).fired and not p.advance(0, 0.07).fired
+
 
 def test_playback_ends_at_last_sample():
     t = EchoTrace(1, 0, 0.1, [(0, 0.0, 0, 0, False), (0, 0.1, 20, 0, False)], [])
     assert EchoPlayback(t).advance(0, 5.0).ended
 
+
 def test_missing_encounter_returns_none():
     t = EchoTrace(1, 0, 0.1, [(0, 0.0, 0, 0, False)], [])
     assert EchoPlayback(t).advance(3, 1.0) is None
+
 
 def test_loadout_follows_time():
     t = EchoTrace(1, 0, 2, [(0, 0.0, 0, 0, False), (0, 2.0, 0, 0, False)], [(0, 1.0, {"wing_l": "turret"})])
     p = EchoPlayback(t)
     assert p.advance(0, 0.5).loadout == {} and p.advance(0, 1.5).loadout == {"wing_l": "turret"}
 
+
 def test_roster_furthest_then_most_recent():
     ts = [EchoTrace(i, reached, 30.0, [], []) for i, reached in enumerate([1, 4, 4, 2, 0, 3, 4])]
     assert [t.loop for t in select_roster(ts)] == [6, 2, 1, 5, 3]
 
+
 def test_store_drops_short_and_caps():
     traces = []
-    for i in range(15): traces = store_trace(traces, EchoTrace(i, 0, 10.0 + i, [], []))
+    for i in range(15):
+        traces = store_trace(traces, EchoTrace(i, 0, 10.0 + i, [], []))
     traces = store_trace(traces, EchoTrace(99, 0, 4.0, [], []))
     assert len(traces) == 12 and 99 not in [t.loop for t in traces] and min(t.duration for t in traces) == 13.0
+
 
 def test_densest_cluster():
     pts = [(0, 0), (10, 0), (0, 10), (500, 500)]
     cx, cy = densest_cluster(pts, 90)
     assert cx < 20 and cy < 20
     assert densest_cluster([], 90, fallback=(7, 8)) == (7, 8)
+
 
 def test_trace_data_round_trip():
     t = EchoTrace(2, 1, 12.0, [(0, 0.0, 1.5, 2.5, True)], [(0, 0.0, {"fore_l": "slug*"})])
@@ -437,36 +495,49 @@ Act 1 logs (ids, speakers and triggers fixed here; copy follows the tone rules a
 - [ ] **Step 1: Write failing tests in `tests/test_story.py`**
 
 ```python
-@pytest.mark.parametrize("text,state,expected", [
-    ("always", S(), True),
-    ("loop >= 3", S(loop=3), True),
-    ("loop >= 3", S(loop=2), False),
-    ("flag:warden_seen", S(flags={"warden_seen"}), True),
-    ("not flag:warden_seen", S(flags={"warden_seen"}), False),
-    ("flag:a and reached > 1", S(flags={"a"}, reached=2), True),
-])
-def test_conditions(text, state, expected): assert parse_condition(text)(state) is expected
+@pytest.mark.parametrize(
+    "text,state,expected",
+    [
+        ("always", S(), True),
+        ("loop >= 3", S(loop=3), True),
+        ("loop >= 3", S(loop=2), False),
+        ("flag:warden_seen", S(flags={"warden_seen"}), True),
+        ("not flag:warden_seen", S(flags={"warden_seen"}), False),
+        ("flag:a and reached > 1", S(flags={"a"}, reached=2), True),
+    ],
+)
+def test_conditions(text, state, expected):
+    assert parse_condition(text)(state) is expected
+
 
 @pytest.mark.parametrize("bad", ["loop >> 3", "flag:", "health >= 2", "loop >= x", ""])
 def test_bad_conditions_raise(bad):
-    with pytest.raises(ValueError): parse_condition(bad)
+    with pytest.raises(ValueError):
+        parse_condition(bad)
+
 
 def test_priority_and_unread():
     logs = [LogEntry("a", "pilot", ("x",), "always", 1), LogEntry("b", "pilot", ("y",), "always", 5)]
     d = LogDirector(logs, read=[])
-    assert d.next_log(S()).id == "b"; d.mark_read("b")
-    assert d.next_log(S()).id == "a"; d.mark_read("a")
+    assert d.next_log(S()).id == "b"
+    d.mark_read("b")
+    assert d.next_log(S()).id == "a"
+    d.mark_read("a")
     assert d.next_log(S()) is None and [e.id for e in d.unlocked()] == ["a", "b"]
+
 
 def test_bundled_logs_valid():
     logs = load_logs()
     assert len(logs) == 20 and len({l.id for l in logs}) == 20
     assert all(1 <= len(l.lines) <= 3 for l in logs)
 
+
 def test_invalid_file_is_safe(tmp_path):
-    p = tmp_path / "logs.json"; p.write_text('[{"id":"a","speaker":"pilot","lines":["x"],"when":"loop >> 1"}]')
+    p = tmp_path / "logs.json"
+    p.write_text('[{"id":"a","speaker":"pilot","lines":["x"],"when":"loop >> 1"}]')
     logs, notice = load_logs_safe(p)
     assert logs == [] and notice
+
 
 def test_echoes_lost_counted_from_flags():
     save = SaveData(flags={"echo_lost:3", "echo_lost:5", "warden_seen"})
@@ -514,34 +585,48 @@ Add to `tests/test_gameplay.py`: `test_drift_pushes_log_panel_once` and `test_lo
 def test_first_launch_shows_opening_log_then_launches(game):
     game.scenes.push(HangarScene(game))
     assert isinstance(game.scenes.top, LogPanel)
-    press(game, "confirm"); press(game, "confirm")
+    press(game, "confirm")
+    press(game, "confirm")
     assert isinstance(game.scenes.top, GameplayScene)
+
 
 def test_death_shows_card_then_hangar_with_next_loop(game):
     scene = start_run(game)
     scene.player.take_damage(999, random.Random(0))
     run_frames(game, 120)
     assert isinstance(game.scenes.top, LoopEndScene)
-    run_frames(game, 60); press(game, "confirm")
+    run_frames(game, 60)
+    press(game, "confirm")
     assert isinstance(game.scenes.top, HangarScene) and game.save.loop == 2
 
+
 def test_abandon_counts_as_loop_end(game):
-    scene = start_run(game); run_frames(game, 60 * 12)
-    scene.handle_action("pause"); select(game, "ABANDON LOOP")
+    scene = start_run(game)
+    run_frames(game, 60 * 12)
+    scene.handle_action("pause")
+    select(game, "ABANDON LOOP")
     assert game.save.loop == 2 and len(game.save.records) == 1
 
-def test_quit_mid_run_saves_loop(game, tmp_path):   # Review Focus 1
-    start_run(game); run_frames(game, 60 * 12)
-    pygame.event.post(pygame.event.Event(pygame.QUIT)); game.step(1 / 60)
+
+def test_quit_mid_run_saves_loop(game, tmp_path):  # Review Focus 1
+    start_run(game)
+    run_frames(game, 60 * 12)
+    pygame.event.post(pygame.event.Event(pygame.QUIT))
+    game.step(1 / 60)
     assert load_save().loop == 2 and load_save().echoes
+
 
 def test_hangar_shows_notice_once(game):
     game.save.notice = "Progress could not be saved."
-    h = HangarScene(game); game.scenes.push(h); h.draw(game.screen)
+    h = HangarScene(game)
+    game.scenes.push(h)
+    h.draw(game.screen)
     assert game.save.notice is None
 
+
 def test_archive_lists_read_logs(game):
-    game.logs.mark_read("a1_open"); game.scenes.push(ArchiveScene(game))
+    game.logs.mark_read("a1_open")
+    game.scenes.push(ArchiveScene(game))
     assert [e.id for e in game.scenes.top.entries] == ["a1_open"]
 ```
 
@@ -581,21 +666,36 @@ def test_archive_lists_read_logs(game):
 def test_hp_scales_with_difficulty(display):
     assert Warden(400.0).max_hp == 160 and Warden(400.0, hp_mult=1.4).max_hp == 224
 
+
 def test_phases(display):
-    w = Warden(400.0); w.hit(55); assert w.phase == 2; w.hit(53); assert w.phase == 3
+    w = Warden(400.0)
+    w.hit(55)
+    assert w.phase == 2
+    w.hit(53)
+    assert w.phase == 3
+
 
 def test_hunt_targets_densest_echo_cluster(display):
     world = FakeWorld(echoes=[(100, 400), (110, 410), (700, 400)])
-    w = Warden(400.0); w.hp = int(w.max_hp * 0.5); w.y = w.target_y
+    w = Warden(400.0)
+    w.hp = int(w.max_hp * 0.5)
+    w.y = w.target_y
     run(w, world, seconds=1.2)
-    assert any(vx < 0 for _, (vx, vy), _ in world.shots)   # first volley leans toward x≈105
+    assert any(vx < 0 for _, (vx, vy), _ in world.shots)  # first volley leans toward x≈105
+
 
 def test_eye_exposed_doubles_damage(display):
-    w = Warden(400.0); w.hp = 40; w.force_exposed(True)
-    w.hit(5); assert w.hp == 30
+    w = Warden(400.0)
+    w.hp = 40
+    w.force_exposed(True)
+    w.hit(5)
+    assert w.hp == 30
+
 
 def test_stays_on_screen(display):
-    w = Warden(400.0); pygame.sprite.Group(w); run(w, FakeWorld(), seconds=20)
+    w = Warden(400.0)
+    pygame.sprite.Group(w)
+    run(w, FakeWorld(), seconds=20)
     assert w.alive() and 0 < w.rect.centery < 320
 ```
 
@@ -638,27 +738,37 @@ def test_scarred_variant_size_and_determinism(display):
     a, b = scarred_variant("enemy0", "drone"), scarred_variant("enemy0", "drone")
     assert a.get_size() == (48, 64) and pygame.image.tobytes(a, "RGBA") == pygame.image.tobytes(b, "RGBA")
 
+
 def test_warden_sprite_symmetric(display):
     body, eye = warden_sprites(1)
     assert pygame.transform.flip(body, True, False).get_at((5, 5)) == body.get_at((body.get_width() - 6, 5))
 
-def test_drone_sound_when_mixer_available():
-    if not audio.init_mixer(): pytest.skip("no mixer")
-    snd = drone_sound(2.0); assert snd is not None and snd.get_length() == pytest.approx(2.0, abs=0.2)
 
-def test_reduced_flashing_disables_flash_and_caps_shake(game):   # Review Focus 4
+def test_drone_sound_when_mixer_available():
+    if not audio.init_mixer():
+        pytest.skip("no mixer")
+    snd = drone_sound(2.0)
+    assert snd is not None and snd.get_length() == pytest.approx(2.0, abs=0.2)
+
+
+def test_reduced_flashing_disables_flash_and_caps_shake(game):  # Review Focus 4
     game.settings.reduced_flashing = True
     scene = start_run(game)
-    scene.flash.trigger((255, 255, 255), 200); assert scene.flash.alpha == 0
-    scene.shake.add(50); assert scene.shake.strength <= 4.0
+    scene.flash.trigger((255, 255, 255), 200)
+    assert scene.flash.alpha == 0
+    scene.shake.add(50)
+    assert scene.shake.strength <= 4.0
 
-def test_flare_with_reduced_flashing_is_warning_only(game):   # Review Focus 4
+
+def test_flare_with_reduced_flashing_is_warning_only(game):  # Review Focus 4
     game.settings.reduced_flashing = True
     scene = start_run(game, encounter=4)
-    scene.trigger_moment("flare"); run_frames(game, 60 * 4)
+    scene.trigger_moment("flare")
+    run_frames(game, 60 * 4)
     assert scene.flash.alpha == 0 and scene.player.health == 100
 
-def test_hud_draws_with_full_loadout(game): ...   # draw HUD with six parts and five echoes; no exception
+
+def test_hud_draws_with_full_loadout(game): ...  # draw HUD with six parts and five echoes; no exception
 ```
 
 - [ ] **Step 2: Run the new tests.** Expected: FAIL on missing functions.
