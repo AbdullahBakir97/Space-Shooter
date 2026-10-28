@@ -63,3 +63,21 @@ class EnemyBullet(Bullet):
     def __init__(self, pos, vel, damage: int = 20, big: bool = False) -> None:
         image = _enemy_bullet_image(9 if big else 6, ORANGE if big else RED)
         super().__init__(pos, vel, image, damage)
+
+
+@assets.register_cache
+@cache
+def _slug_image() -> pygame.Surface:
+    surf = pygame.Surface((10, 14), pygame.SRCALPHA)
+    pygame.draw.ellipse(surf, (140, 62, 40), (0, 0, 10, 14))
+    pygame.draw.ellipse(surf, (255, 122, 40), (3, 2, 4, 8))
+    return surf
+
+
+class SlugBullet(Bullet):
+    """Slow heavy round: deals 3 hits and passes through one enemy."""
+
+    def __init__(self, pos, vel, damage: int = 3, pierce: int = 1) -> None:
+        super().__init__(pos, vel, _slug_image(), damage)
+        self.pierce = pierce
+        self.hit_ids: set[int] = set()

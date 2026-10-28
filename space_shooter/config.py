@@ -28,18 +28,11 @@ MAGENTA = (230, 90, 220)
 # --- Player -----------------------------------------------------------------
 PLAYER_SPEED = 380.0  # px/s
 PLAYER_MAX_HEALTH = 100
-PLAYER_START_LIVES = 3
-PLAYER_START_BOMBS = 2
-PLAYER_MAX_BOMBS = 5
 PLAYER_INVULN_TIME = 2.0  # seconds after respawn / hit
 PLAYER_HIT_INVULN_TIME = 0.6
-PLAYER_RESPAWN_DELAY = 1.2
 PLAYER_COLLISION_DAMAGE = 35
 PLAYER_BULLET_DAMAGE = 1  # enemy HP is counted in bullet hits
-SHIELD_DURATION = 8.0
-WEAPON_MAX_LEVEL = 4
-# fire cooldown (seconds) per weapon level 1..4
-WEAPON_COOLDOWN = {1: 0.22, 2: 0.20, 3: 0.18, 4: 0.15}
+WEAPON_COOLDOWN = 0.2  # main gun, seconds between shots
 BULLET_SPEED = 820.0
 ENEMY_BULLET_SPEED = 260.0
 
@@ -56,17 +49,10 @@ WAVE_START_DELAY = 1.5
 COMBO_WINDOW = 1.6  # seconds between kills to keep the chain alive
 COMBO_MAX = 8
 
-# --- Power-ups --------------------------------------------------------------
-POWERUP_SPEED = 140.0
-POWERUP_DROP_CHANCE = 0.14
-POWERUP_WEIGHTS = {"weapon": 30, "health": 25, "shield": 18, "bomb": 12, "score": 15}
-POWERUP_SCORE_VALUE = 1000
-POWERUP_HEALTH_VALUE = 40
 
 # --- Effects ----------------------------------------------------------------
 SHAKE_HIT = 6.0
 SHAKE_EXPLOSION = 3.0
-SHAKE_BOMB = 14.0
 SHAKE_BOSS_DEATH = 18.0
 LOW_HEALTH_THRESHOLD = 30
 
