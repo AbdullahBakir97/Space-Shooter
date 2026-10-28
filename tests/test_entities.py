@@ -17,6 +17,9 @@ class FakeWorld:
         self.rng = random.Random(1)
         self.shots = []
 
+    def aim_point(self):
+        return self.player_pos
+
     def fire_enemy_bullet(self, pos, vel, big=False):
         self.shots.append((pos, vel, big))
 
@@ -180,3 +183,10 @@ class TestEnemies:
         assert not e.hit(1)
         assert e.flash > 0
         assert e.hit(5)
+
+
+def test_ash_cloud_is_dense_enough_to_hide_bullets(display):
+    from space_shooter.procgen import ash_cloud_sprite
+
+    cloud = ash_cloud_sprite(0)
+    assert cloud.get_at((100, 65)).a >= 140

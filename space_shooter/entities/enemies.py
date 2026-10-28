@@ -44,6 +44,7 @@ class Enemy(pygame.sprite.Sprite):
         self.age = 0.0
         self.flash = 0.0
         self.is_boss = False
+        self.retreating = False
 
     def _load_frames(self) -> list[pygame.Surface]:
         names = assets.SPRITE_NAMES["enemy"]
@@ -59,11 +60,21 @@ class Enemy(pygame.sprite.Sprite):
         self.flash = FLASH_TIME
         return self.hp <= 0
 
+    def retreat(self) -> None:
+        """Leave the field upward (time cap reached)."""
+        if not self.is_boss:
+            self.retreating = True
+
     # -- movement ------------------------------------------------------------
     def update(self, dt: float, world) -> None:
         self.age += dt
         self.flash = max(0.0, self.flash - dt)
-        self.move(dt, world)
+        if self.retreating:
+            self.y -= self.speed * 1.5 * dt
+            if self.y < -80:
+                self.kill()
+        else:
+            self.move(dt, world)
         self.rect.center = (round(self.x), round(self.y))
         frame = int(self.age * 8) % len(self.frames)
         self.image = self.flash_frames[frame] if self.flash > 0 else self.frames[frame]
@@ -153,7 +164,7 @@ class Gunner(Enemy):
         self.fire_timer -= dt * self.fire_mult
         if self.fire_timer <= 0:
             self.fire_timer = world.rng.uniform(1.4, 2.2)
-            px, py = world.player_pos
+            px, py = world.aim_point()
             dx, dy = px - self.x, py - self.y
             dist = math.hypot(dx, dy) or 1.0
             vel = (dx / dist * ENEMY_BULLET_SPEED, dy / dist * ENEMY_BULLET_SPEED)
@@ -203,7 +214,7 @@ class Boss(Enemy):
 
     def _fire_pattern(self, world, phase: int) -> None:
         origin = (self.x, self.rect.bottom - 10)
-        px, py = world.player_pos
+        px, py = world.aim_point()
         dx, dy = px - origin[0], py - origin[1]
         base = math.atan2(dy, dx)
         count = 3 + 2 * phase
