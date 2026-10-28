@@ -30,6 +30,8 @@ from space_shooter.hud import draw_hud
 from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL
 from space_shooter.salvage import DROP_BASE, PART_TYPES, PATCH_HULL, SLOT_OFFSETS, SLOTS, part_from_code, roll_drop
 from space_shooter.scenes.base import Scene
+from space_shooter.scenes.log_panel import LogPanel
+from space_shooter.story import state_from_save
 from space_shooter.ui import draw_text
 
 SPAWN_MARGIN = 48
@@ -249,7 +251,9 @@ class GameplayScene(Scene):
 
     # -- encounters ----------------------------------------------------------
     def _on_director_event(self, event: str, value) -> None:
-        if event == "encounter_start":
+        if event == "drift_start":
+            self._play_due_log(value)
+        elif event == "encounter_start":
             self.recorder.begin_encounter(value)
             self.recorder.note_loadout({})
             self.recorder.note_loadout(self.player.loadout.to_codes())
@@ -270,6 +274,15 @@ class GameplayScene(Scene):
                 if not isinstance(hazard, Hulk):
                     hazard.kill()
             self.blackout_timer = 0.0
+
+    def _play_due_log(self, reached: int) -> None:
+        """At most one radio log per drift: the best unread one that is due."""
+        entry = self.game.logs.next_log(state_from_save(self.game.save, reached=reached))
+        if entry is None:
+            return
+        self.game.logs.mark_read(entry.id)
+        self.game.persist()
+        self.game.scenes.push(LogPanel(self.game, entry))
 
     def trigger_moment(self, name: str) -> None:
         """Play an encounter's named moment (also the entry point for tests)."""

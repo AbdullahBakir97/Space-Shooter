@@ -26,6 +26,9 @@ space-shooter = "space_shooter.game:main"
 [tool.setuptools.packages.find]
 include = ["space_shooter*"]
 
+[tool.setuptools.package-data]
+space_shooter = ["data/*.json"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"
