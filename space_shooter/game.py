@@ -7,7 +7,6 @@ import pygame
 from space_shooter import assets
 from space_shooter.audio import AudioManager
 from space_shooter.config import FPS, HEIGHT, MAX_DT, TITLE, WIDTH
-from space_shooter.highscores import HighScoreTable
 from space_shooter.save import load_save, write_save
 from space_shooter.scenes.base import SceneManager
 from space_shooter.settings_store import Settings, load_settings, save_settings
@@ -50,7 +49,6 @@ class Game:
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
         self.audio = AudioManager(self.settings.sfx_volume)
-        self.highscores = HighScoreTable.load()
         self.save = load_save()
         logs, notice = load_logs_safe()
         if notice:
@@ -146,6 +144,14 @@ class Game:
         if not write_save(self.save):
             self.save.notice = "Progress could not be saved."
 
+    def close_open_loop(self) -> None:
+        """Closing the window mid-run ends that loop like a death (keeps the echo)."""
+        from space_shooter.scenes.gameplay import GameplayScene
+
+        for scene in self.scenes.stack:
+            if isinstance(scene, GameplayScene):
+                scene.end_loop(victory=False)
+
     def quit(self) -> None:
         self.running = False
 
@@ -153,6 +159,7 @@ class Game:
         """One frame: events, update, draw. Separated out so tests can drive it."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                self.close_open_loop()
                 self.running = False
                 return
             scene = self.scenes.top
@@ -173,9 +180,9 @@ class Game:
         pygame.display.flip()
 
     def run(self) -> None:
-        from space_shooter.scenes.menu import MenuScene
+        from space_shooter.scenes.hangar import HangarScene
 
-        self.scenes.push(MenuScene(self))
+        self.scenes.push(HangarScene(self))
         while self.running:
             dt = min(MAX_DT, self.clock.tick(FPS) / 1000.0)
             self.fps = self.clock.get_fps()

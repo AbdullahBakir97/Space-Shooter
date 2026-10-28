@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pygame
 
-from space_shooter.config import DIM, HEIGHT, WIDTH
+from space_shooter.config import DIFFICULTIES, DIFFICULTY_ORDER, DIM, HEIGHT, WIDTH
 from space_shooter.scenes.base import Scene
 from space_shooter.settings_store import save_settings
 from space_shooter.ui import MenuItem, MenuList, draw_text
@@ -30,6 +30,14 @@ class SettingsScene(Scene):
                 MenuItem(
                     "SHOW FPS", value=lambda: "ON" if s.show_fps else "OFF", adjust=lambda d: self.toggle("show_fps")
                 ),
+                MenuItem(
+                    "REDUCED FLASHING",
+                    value=lambda: "ON" if s.reduced_flashing else "OFF",
+                    adjust=lambda d: self.toggle("reduced_flashing"),
+                ),
+                MenuItem(
+                    "DIFFICULTY", value=lambda: DIFFICULTIES[s.difficulty].name.upper(), adjust=self.cycle_difficulty
+                ),
                 MenuItem("BACK", self.back),
             ],
             on_move=lambda: self.game.audio.play("menu_move"),
@@ -41,6 +49,11 @@ class SettingsScene(Scene):
         s.sfx_volume = min(1.0, max(0.0, round(s.sfx_volume + 0.1 * direction, 1)))
         self.game.audio.set_volume(s.sfx_volume)
         self.game.audio.play("shoot")
+
+    def cycle_difficulty(self, direction: int) -> None:
+        s = self.game.settings
+        i = DIFFICULTY_ORDER.index(s.difficulty)
+        s.difficulty = DIFFICULTY_ORDER[(i + direction) % len(DIFFICULTY_ORDER)]
 
     def toggle(self, field: str) -> None:
         s = self.game.settings
@@ -65,6 +78,6 @@ class SettingsScene(Scene):
         from space_shooter.ui import dim_overlay
 
         dim_overlay(surface, 200)
-        draw_text(surface, "SETTINGS", 56, (WIDTH // 2, 120))
-        self.menu.draw(surface, HEIGHT // 2 - 60, size=34)
+        draw_text(surface, "SETTINGS", 56, (WIDTH // 2, 90))
+        self.menu.draw(surface, 170, spacing=46, size=32)
         draw_text(surface, "LEFT / RIGHT to change   ESC to go back", 20, (WIDTH // 2, HEIGHT - 44), DIM)

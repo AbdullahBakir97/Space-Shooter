@@ -29,13 +29,16 @@ from space_shooter.entities.player import Player
 from space_shooter.hud import draw_hud
 from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL
 from space_shooter.salvage import DROP_BASE, PART_TYPES, PATCH_HULL, SLOT_OFFSETS, SLOTS, part_from_code, roll_drop
+from space_shooter.save import Record, add_record
 from space_shooter.scenes.base import Scene
 from space_shooter.scenes.log_panel import LogPanel
+from space_shooter.scenes.loop_end import RunResult
 from space_shooter.story import state_from_save
 from space_shooter.ui import draw_text
 
 SPAWN_MARGIN = 48
-GAME_OVER_DELAY = 1.6
+DEATH_BEAT = 1.2  # real seconds of slow motion before the loop-end card
+DEATH_TIME_SCALE = 0.3
 KNOCK_LIFETIME = 6.0
 KNOCK_PICKUP_DELAY = 0.8
 TRACTOR_RANGE = 180.0
@@ -82,14 +85,15 @@ class GameplayScene(Scene):
         self.echoes: pygame.sprite.Group = pygame.sprite.Group(Echo(t) for t in select_roster(traces))
         self.echo_bullets: pygame.sprite.Group = pygame.sprite.Group()
         self.radio_lines: list[tuple[str, float]] = []
-        self.loop_ended = False
         self.shake = ScreenShake(game.settings.screen_shake)
         self.flash = Flash()
         self.canvas = pygame.Surface((WIDTH, HEIGHT))
         self.score = 0  # salvage value, shown only at loop end
         self.time = 0.0
         self.boss: Enemy | None = None
-        self.game_over_timer: float | None = None
+        self.death_timer: float | None = None
+        self.echoes_lost: list[int] = []
+        self.result = None
         self.kills = 0
         self.exhaust_timer = 0.0
 
@@ -132,7 +136,7 @@ class GameplayScene(Scene):
         self.game.audio.stop_all_loops()
 
     def handle_action(self, action: str) -> None:
-        if self.game_over_timer is not None:
+        if self.death_timer is not None:
             return
         if action in ("pause", "back"):
             from space_shooter.scenes.pause import PauseScene
@@ -155,15 +159,8 @@ class GameplayScene(Scene):
         self.blackout_timer = max(0.0, self.blackout_timer - dt)
         self.radio_lines = [(text, t - dt) for text, t in self.radio_lines if t - dt > 0]
 
-        if self.game_over_timer is not None:
-            self.game_over_timer -= dt
-            self.enemies.update(dt, self)
-            self.enemy_bullets.update(dt)
-            if self.game_over_timer <= 0:
-                from space_shooter.scenes.gameover import GameOverScene
-
-                self.game.scenes.push(GameOverScene(self.game, self.score, self.director.index + 1))
-                self.game_over_timer = float("inf")
+        if self.death_timer is not None:
+            self._death_beat(dt)
             return
 
         self.player.update(dt, self.game.move_vector())
@@ -209,22 +206,38 @@ class GameplayScene(Scene):
         else:
             self.game.audio.stop("low_health")
 
-        if self.player.dead and self.game_over_timer is None:
-            self.game_over_timer = GAME_OVER_DELAY
+        if self.player.dead and self.death_timer is None:
+            self.death_timer = DEATH_BEAT
             self.game.audio.stop_all_loops()
             self.end_loop(victory=False)
 
-    def end_loop(self, victory: bool) -> None:
-        """Close this loop once: keep the run as an echo, advance the loop counter, save."""
-        if self.loop_ended:
-            return
-        self.loop_ended = True
+    def _death_beat(self, dt: float) -> None:
+        """Slow motion over the wreck, then the loop-end card."""
+        slow = dt * DEATH_TIME_SCALE
+        self.enemies.update(slow, self)
+        self.enemy_bullets.update(slow)
+        self.death_timer -= dt
+        if self.death_timer <= 0 and self.result is not None:
+            from space_shooter.scenes.loop_end import LoopEndScene
+
+            self.death_timer = float("inf")
+            self.game.scenes.push(LoopEndScene(self.game, self.result))
+
+    def end_loop(self, victory: bool) -> RunResult:
+        """Close this loop exactly once: keep the run as an echo, record it, advance, save."""
+        if self.result is not None:
+            return self.result
         save = self.game.save
-        trace = self.recorder.finish(reached=self.director.index, duration=self.time)
+        reached = self.director.index
+        trace = self.recorder.finish(reached=reached, duration=self.time)
         traces = store_trace([EchoTrace.from_data(d) for d in save.echoes], trace)
         save.echoes = [t.to_data() for t in traces]
+        record = Record(self.loop, reached, self.score, round(self.time, 1), self.game.settings.difficulty)
+        add_record(save, record)
         save.loop += 1
         self.game.persist()
+        self.result = RunResult(self.loop, reached, self.score, self.time, list(self.echoes_lost), victory)
+        return self.result
 
     def _exhaust(self, dt: float) -> None:
         if not self.player.alive_in_world:
@@ -436,6 +449,7 @@ class GameplayScene(Scene):
         save.flags |= {"first_echo_lost", f"echo_lost:{echo.loop}"}
         self.effects.add(Explosion(echo.rect.center, scale=4))
         burst(self.particles, echo.rect.center, 16, (STEEL, ASH), 220, 0.7, 3, self.rng)
+        self.echoes_lost.append(echo.loop)
         self.radio(f"Echo {echo.loop} is gone.")
         self.game.persist()
 

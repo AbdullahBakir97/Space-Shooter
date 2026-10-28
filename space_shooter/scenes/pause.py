@@ -15,9 +15,8 @@ class PauseScene(Scene):
         self.menu = MenuList(
             [
                 MenuItem("RESUME", self.resume),
-                MenuItem("RESTART", self.restart),
                 MenuItem("SETTINGS", self.settings),
-                MenuItem("QUIT TO MENU", self.to_menu),
+                MenuItem("ABANDON LOOP", self.abandon),
             ],
             on_move=lambda: self.game.audio.play("menu_move"),
             on_select=lambda: self.game.audio.play("menu_select"),
@@ -31,20 +30,20 @@ class PauseScene(Scene):
         self.game.audio.play("pause_out")
         self.game.scenes.pop()
 
-    def restart(self) -> None:
-        from space_shooter.scenes.gameplay import GameplayScene
-
-        self.game.scenes.clear_to(GameplayScene(self.game))
-
     def settings(self) -> None:
         from space_shooter.scenes.settings import SettingsScene
 
         self.game.scenes.push(SettingsScene(self.game))
 
-    def to_menu(self) -> None:
-        from space_shooter.scenes.menu import MenuScene
+    def abandon(self) -> None:
+        """Give up this loop: it closes exactly like a death."""
+        from space_shooter.scenes.gameplay import GameplayScene
+        from space_shooter.scenes.loop_end import LoopEndScene
 
-        self.game.scenes.clear_to(MenuScene(self.game))
+        self.game.scenes.pop()
+        gameplay = self.game.scenes.top
+        if isinstance(gameplay, GameplayScene):
+            self.game.scenes.push(LoopEndScene(self.game, gameplay.end_loop(victory=False)))
 
     def handle_action(self, action: str) -> None:
         if action in ("back", "pause"):

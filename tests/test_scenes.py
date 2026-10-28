@@ -1,0 +1,154 @@
+"""Hangar, loop-end card, archive, records and the loop lifecycle."""
+
+import random
+
+import pygame
+import pytest
+
+from space_shooter.game import Game
+from space_shooter.save import load_save
+from space_shooter.scenes.archive import ArchiveScene
+from space_shooter.scenes.gameplay import GameplayScene
+from space_shooter.scenes.hangar import HangarScene
+from space_shooter.scenes.log_panel import LogPanel
+from space_shooter.scenes.loop_end import LoopEndScene, RunResult
+from space_shooter.scenes.pause import PauseScene
+from space_shooter.scenes.records import RecordsScene
+from space_shooter.scenes.settings import SettingsScene
+from space_shooter.settings_store import Settings, load_settings
+from tests.helpers import press, run_frames, select, silence_radio, start_run
+
+
+@pytest.fixture
+def game():
+    g = Game(settings=Settings(sfx_volume=0.0), headless=True)
+    yield g
+    pygame.quit()
+
+
+def test_first_launch_shows_opening_log_then_launches(game):
+    game.scenes.push(HangarScene(game))
+    assert isinstance(game.scenes.top, LogPanel) and game.scenes.top.entry.id == "a1_open"
+    press(game, "confirm")
+    press(game, "confirm")
+    assert isinstance(game.scenes.top, GameplayScene)
+
+
+def test_returning_player_sees_hangar_menu(game):
+    game.save.read_logs.append("a1_open")
+    game.scenes.push(HangarScene(game))
+    assert isinstance(game.scenes.top, HangarScene)
+    assert [i.label for i in game.scenes.top.menu.items] == ["LAUNCH", "LOG ARCHIVE", "RECORDS", "SETTINGS", "QUIT"]
+    select(game, "LAUNCH")
+    assert isinstance(game.scenes.top, GameplayScene)
+
+
+def test_death_shows_card_then_hangar_with_next_loop(game):
+    scene = start_run(game)
+    scene.player.take_damage(999, random.Random(0))
+    run_frames(game, 30)
+    assert not isinstance(game.scenes.top, LoopEndScene)  # slow-motion beat first
+    run_frames(game, 90)
+    card = game.scenes.top
+    assert isinstance(card, LoopEndScene) and card.result.loop == 1 and not card.result.victory
+    press(game, "confirm")
+    assert game.scenes.top is card  # ignores input for the first 0.8 s
+    run_frames(game, 60)
+    press(game, "confirm")
+    assert isinstance(game.scenes.top, HangarScene) and game.save.loop == 2
+
+
+def test_death_adds_record(game):
+    scene = start_run(game, encounter=2)
+    scene.score = 1234
+    scene.player.take_damage(999, random.Random(0))
+    run_frames(game, 2)
+    rec = game.save.records[0]
+    assert (rec.loop, rec.reached, rec.salvage) == (1, 2, 1234)
+
+
+def test_abandon_counts_as_loop_end(game):
+    scene = start_run(game)
+    run_frames(game, 60 * 6)
+    scene.handle_action("pause")
+    assert isinstance(game.scenes.top, PauseScene)
+    assert [i.label for i in game.scenes.top.menu.items] == ["RESUME", "SETTINGS", "ABANDON LOOP"]
+    select(game, "ABANDON LOOP")
+    assert isinstance(game.scenes.top, LoopEndScene)
+    assert game.save.loop == 2 and len(game.save.records) == 1
+
+
+def test_quit_mid_run_saves_loop(game):  # Review Focus 1
+    start_run(game)
+    run_frames(game, 60 * 6)
+    pygame.event.post(pygame.event.Event(pygame.QUIT))
+    game.step(1 / 60)
+    assert not game.running
+    saved = load_save()
+    assert saved.loop == 2 and saved.echoes
+
+
+def test_quit_from_hangar_does_not_advance_loop(game):
+    silence_radio(game)
+    game.scenes.push(HangarScene(game))
+    pygame.event.post(pygame.event.Event(pygame.QUIT))
+    game.step(1 / 60)
+    assert load_save().loop == 1
+
+
+def test_hangar_shows_notice_once(game):
+    game.save.read_logs.append("a1_open")
+    game.save.notice = "Progress could not be saved."
+    h = HangarScene(game)
+    game.scenes.push(h)
+    h.draw(game.screen)
+    assert game.save.notice is None and h.notice == "Progress could not be saved."
+
+
+def test_hangar_lists_echo_roster(game):
+    from tests.test_gameplay import seeded_trace
+
+    game.save.read_logs.append("a1_open")
+    game.save.echoes = [seeded_trace(n, reached=n % 3).to_data() for n in range(1, 8)]
+    h = HangarScene(game)
+    game.scenes.push(h)
+    assert h.roster_names() == ["ECHO 5", "ECHO 2", "ECHO 7", "ECHO 4", "ECHO 1"]
+    h.draw(game.screen)
+
+
+def test_archive_lists_read_logs(game):
+    game.logs.mark_read("a1_open")
+    game.scenes.push(ArchiveScene(game))
+    archive = game.scenes.top
+    assert [e.id for e in archive.entries] == ["a1_open"]
+    press(game, "confirm")
+    assert isinstance(game.scenes.top, LogPanel)
+
+
+def test_records_scene_draws(game):
+    from space_shooter.save import Record
+
+    game.save.records.append(Record(3, 4, 900, 125.0, "hard"))
+    game.scenes.push(RecordsScene(game))
+    game.scenes.draw(game.screen)
+    assert game.scenes.top.rows() == [("3", "LAST LIGHT", "900", "2:05", "H")]
+
+
+def test_settings_reduced_flashing_and_difficulty(game):
+    game.scenes.push(SettingsScene(game))
+    labels = [i.label for i in game.scenes.top.menu.items]
+    assert "REDUCED FLASHING" in labels and "DIFFICULTY" in labels
+    select(game, "REDUCED FLASHING")
+    select(game, "DIFFICULTY")
+    select(game, "BACK")
+    saved = load_settings()
+    assert saved.reduced_flashing is True and saved.difficulty == "hard"
+
+
+def test_loop_end_card_victory_text(game):
+    result = RunResult(loop=9, reached=5, salvage=7000, time=600.0, echoes_lost=[3], victory=True)
+    card = LoopEndScene(game, result)
+    game.scenes.push(card)
+    game.scenes.draw(game.screen)
+    assert card.title == "THE WARDEN IS SILENT"
+    assert LoopEndScene(game, RunResult(2, 1, 0, 30.0, [], False)).title == "LOOP 2"
