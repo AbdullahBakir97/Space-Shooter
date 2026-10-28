@@ -17,13 +17,24 @@ from space_shooter.salvage import PATCH_HULL, SLOT_OFFSETS, Part
 from space_shooter.save import load_save
 from space_shooter.scenes.gameover import GameOverScene
 from space_shooter.scenes.gameplay import GameplayScene
+from space_shooter.scenes.log_panel import LogPanel
 from space_shooter.scenes.menu import MenuScene
 from space_shooter.scenes.pause import PauseScene
 from space_shooter.settings_store import Settings
+from space_shooter.story import BAD_LOGS_NOTICE, LogDirector
 
 
 @pytest.fixture
 def game():
+    """A game with the radio silent, so mechanics tests are not paused by log panels."""
+    g = Game(settings=Settings(sfx_volume=0.0), headless=True)
+    g.logs = LogDirector([], g.save.read_logs)
+    yield g
+    pygame.quit()
+
+
+@pytest.fixture
+def story_game():
     g = Game(settings=Settings(sfx_volume=0.0), headless=True)
     yield g
     pygame.quit()
@@ -369,3 +380,70 @@ def test_death_stores_trace_and_advances_loop(game):
     stored = EchoTrace.from_data(game.save.echoes[0])
     assert stored.loop == 1 and stored.samples and stored.samples[0][0] == 0
     assert load_save().loop == 2
+
+
+def test_drift_pushes_log_panel_once(story_game):
+    game = story_game
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    run_frames(game, 1)
+    assert isinstance(game.scenes.top, LogPanel) and game.scenes.top.entry.id == "a1_open"
+    assert game.save.read_logs == ["a1_open"]
+    game.scenes.top.handle_action("confirm")
+    game.scenes.top.handle_action("confirm")
+    assert game.scenes.top is scene
+    run_frames(game, 60 * 3)
+    assert game.scenes.top is scene  # one log per drift
+    assert load_save().read_logs == ["a1_open"]
+
+
+def test_next_drift_plays_next_eligible_log(story_game):
+    game = story_game
+    game.save.read_logs.append("a1_open")
+    scene = GameplayScene(game, seed=1)
+    scene.director.index = 0
+    game.scenes.push(scene)
+    run_frames(game, 1)
+    assert game.scenes.top is scene  # nothing eligible before the first encounter
+    scene.director.index = 1
+    scene.director._events.append(("drift_start", 1))
+    run_frames(game, 1)
+    assert isinstance(game.scenes.top, LogPanel) and game.scenes.top.entry.id == "a1_empty_channel"
+
+
+def test_log_panel_completes_then_closes(story_game):
+    game = story_game
+    closed = []
+    entry = game.logs.get("a1_open")
+    game.scenes.push(GameplayScene(game, seed=1))
+    panel = LogPanel(game, entry, on_close=lambda: closed.append(True))
+    game.scenes.push(panel)
+    run_frames(game, 5)
+    assert 0 < panel.shown < len(panel.full_text)
+    panel.handle_action("fire")
+    assert panel.shown == len(panel.full_text) and game.scenes.top is panel
+    panel.handle_action("back")
+    assert game.scenes.top is not panel and closed == [True]
+
+
+def test_typewriter_speed(story_game):
+    game = story_game
+    panel = LogPanel(game, game.logs.get("a1_open"))
+    game.scenes.push(panel)
+    panel.update(0.5)
+    assert panel.shown == 20  # 40 characters per second
+
+
+def test_bad_log_data_starts_silent_with_notice(tmp_path, monkeypatch):
+    from space_shooter import story
+
+    bad = tmp_path / "logs.json"
+    bad.write_text("{broken")
+    monkeypatch.setattr(story, "LOGS_PATH", bad)
+    g = Game(settings=Settings(sfx_volume=0.0), headless=True)
+    assert g.logs.logs == [] and g.save.notice == BAD_LOGS_NOTICE
+    scene = GameplayScene(g, seed=1)
+    g.scenes.push(scene)
+    run_frames(g, 60)
+    assert g.scenes.top is scene
+    pygame.quit()

@@ -12,6 +12,7 @@ from space_shooter.save import load_save, write_save
 from space_shooter.scenes.base import SceneManager
 from space_shooter.settings_store import Settings, load_settings, save_settings
 from space_shooter.starfield import Starfield
+from space_shooter.story import LogDirector, load_logs_safe
 
 KEY_ACTIONS = {
     pygame.K_UP: "up",
@@ -51,6 +52,10 @@ class Game:
         self.audio = AudioManager(self.settings.sfx_volume)
         self.highscores = HighScoreTable.load()
         self.save = load_save()
+        logs, notice = load_logs_safe()
+        if notice:
+            self.save.notice = notice
+        self.logs = LogDirector(logs, self.save.read_logs)
         self.starfield = Starfield()
         self.scenes = SceneManager()
         self.joystick: pygame.joystick.Joystick | None = None
