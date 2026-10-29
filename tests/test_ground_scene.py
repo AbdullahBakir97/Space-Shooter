@@ -187,3 +187,16 @@ def test_headless_ground_autopilot(game, monkeypatch):
     card = game.scenes.top
     assert isinstance(card, LoopEndScene) and card.title == "DOCKED"
     assert card.result.report.claimed == ["m1"] and game.campaign().salvage >= 4 * ground.NEST_SCORE
+
+
+def test_takeoff_marks_the_planet_as_reached(game, monkeypatch):
+    fl, g = take_off_ready(game, monkeypatch)
+    finish_mission(g)
+    run_frames(game, 1)
+    press(game, "fire")  # the gamepad's A button
+    assert game.scenes.top is fl and fl.run.last_fought == "m1"
+    run_frames(game, 1)
+    hx, hy = flight.world_pos(game.system.nodes["home"])
+    fl.tug.x, fl.tug.y = hx, hy - 30
+    press(game, "fire")
+    assert game.scenes.top.result.reached_name == "KESS"

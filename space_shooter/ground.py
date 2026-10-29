@@ -618,9 +618,12 @@ class GroundWorld:
                 s.state, s.goal, s.goal_field = order, None, None
         elif isinstance(order, tuple) and order[0] == "move":
             goal = (float(order[1]), float(order[2]))
+            if self.map.blocked(*goal):  # a click on rock: the last open ground on the way to it
+                goal = self.map.cast(self.pilot.pos, goal)
             for i, s in enumerate(squad):
                 offset = (i - (len(squad) - 1) / 2) * 30
                 spot = self.map.cast(goal, (goal[0] + offset, goal[1]))
+                spot = _centre(_tile_of(spot))  # a tile centre: a body can always stand there
                 s.state, s.goal = "move", spot
                 s.goal_field = self.map.distances_from(spot)
 
@@ -640,6 +643,21 @@ class GroundWorld:
             aim = _centre(best[1]) if downhill else target
         ux, uy = _norm(aim[0] - body.x, aim[1] - body.y)
         step = min(speed * dt, math.dist(body.pos, aim))
+        before = body.pos
+        move_body(self.map, body, ux * step, uy * step)
+        if aim is target and step > 1e-6 and math.dist(before, body.pos) < step / 2:
+            # wedged on a rock corner while running straight: take the flow field's tile path instead
+            self._step_downhill(body, target, field, step)
+
+    def _step_downhill(self, body: Body, target: Point, field: dict, step: float) -> None:
+        tx, ty = _tile_of(body.pos)
+        options = [(field[n], n) for n in ((tx + 1, ty), (tx - 1, ty), (tx, ty + 1), (tx, ty - 1)) if n in field]
+        if not options:
+            return
+        aim = _centre(min(options)[1])
+        if math.dist(body.pos, aim) < 2:  # already centred: the tile we stand on is the way
+            aim = _centre((tx, ty))
+        ux, uy = _norm(aim[0] - body.x, aim[1] - body.y)
         move_body(self.map, body, ux * step, uy * step)
 
     def _survivors(self, dt: float) -> None:
@@ -729,37 +747,41 @@ class GroundWorld:
 
     def _shots(self, dt: float) -> None:
         for shot in list(self.shots):
-            shot.x += shot.vx * dt
-            shot.y += shot.vy * dt
             shot.life -= dt
-            if shot.life <= 0 or self.map.blocked(shot.x, shot.y):
+            if shot.life <= 0:
                 self.shots.remove(shot)
                 continue
-            hit = False
-            if shot.friendly:
-                for e in self.enemies:
-                    if math.dist((shot.x, shot.y), e.pos) <= e.body.radius:
-                        self.damage_enemy(e, shot.damage)
-                        hit = True
-                        break
-                if not hit:
-                    for n in self.nests:
-                        if n.alive and math.dist((shot.x, shot.y), n.body.pos) <= n.body.radius:
-                            self.damage_nest(n, shot.damage)
-                            hit = True
-                            break
-            else:
-                if math.dist((shot.x, shot.y), self.pilot.pos) <= self.pilot.radius:
-                    self.damage_pilot(shot.damage)
-                    hit = not self.invulnerable  # a rolling pilot lets the spit pass
-                else:
-                    for s in self.survivors:
-                        if s.active and math.dist((shot.x, shot.y), s.pos) <= s.body.radius:
-                            self.damage_survivor(s, shot.damage)
-                            hit = True
-                            break
-            if hit:
-                self.shots.remove(shot)
+            # sub-steps no longer than a line-of-sight step, so a shot cannot skip a wall corner or a body
+            steps = max(1, math.ceil(math.hypot(shot.vx, shot.vy) * dt / LOS_STEP))
+            for _ in range(steps):
+                shot.x += shot.vx * dt / steps
+                shot.y += shot.vy * dt / steps
+                if self.map.blocked(shot.x, shot.y) or self._shot_hits(shot):
+                    self.shots.remove(shot)
+                    break
+
+    def _shot_hits(self, shot: Shot) -> bool:
+        p = (shot.x, shot.y)
+        if shot.friendly:
+            for e in self.enemies:
+                if math.dist(p, e.pos) <= e.body.radius:
+                    self.damage_enemy(e, shot.damage)
+                    return True
+            for n in self.nests:
+                if n.alive and math.dist(p, n.body.pos) <= n.body.radius:
+                    self.damage_nest(n, shot.damage)
+                    return True
+            return False
+        if math.dist(p, self.pilot.pos) <= self.pilot.radius:
+            if self.invulnerable:
+                return False  # a rolling pilot lets the spit pass
+            self.damage_pilot(shot.damage)
+            return True
+        for sv in self.survivors:
+            if sv.active and math.dist(p, sv.pos) <= sv.body.radius:
+                self.damage_survivor(sv, shot.damage)
+                return True
+        return False
 
     def _grenades(self, dt: float) -> None:
         for g in list(self.grenades):

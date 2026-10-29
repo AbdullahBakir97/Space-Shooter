@@ -109,6 +109,7 @@ class GroundScene(Scene):
             return False
         self._pay()
         self.run.carried += self.world.squad_bonus()
+        self.run.last_fought = self.node_id
         self.fight_over = True
         self.game.audio.stop_all_loops()
         if self.game.scenes.top is self:
@@ -123,7 +124,7 @@ class GroundScene(Scene):
             from space_shooter.scenes.pause import PauseScene
 
             self.game.scenes.push(PauseScene(self.game))
-        elif action == "confirm":
+        elif action in ("confirm", "fire"):  # the gamepad's A button takes off at the tug
             self.take_off()
         elif action == "dash":
             self.pending.roll = True
@@ -141,7 +142,7 @@ class GroundScene(Scene):
                 self.pending.order = "follow"
             elif event.key == pygame.K_e:
                 self.pending.order = "hold"
-        elif event.type == pygame.MOUSEMOTION:
+        elif event.type == pygame.MOUSEMOTION or (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1):
             self.mouse_aim = True
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             x, y = self.to_world(event.pos)
@@ -172,6 +173,8 @@ class GroundScene(Scene):
             axes = (3, 4) if pad.get_numaxes() > 4 else (2, 3)
             x, y = pad.get_axis(axes[0]), pad.get_axis(axes[1])
         except pygame.error:
+            return None
+        if min(x, y) < -0.98:  # an analogue trigger at rest, not a stick: this pad maps them differently
             return None
         return (x, y) if math.hypot(x, y) > 0.35 else None
 

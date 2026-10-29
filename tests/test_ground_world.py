@@ -234,3 +234,45 @@ def test_pilot_death_event():
     events = w.step(DT, GroundInputs())
     assert w.dead and ("pilot_dead", None) in events
     assert w.step(DT, GroundInputs(move=(1, 0))) == []
+
+
+@pytest.mark.parametrize("offset", [0.0, 0.5, 3.0, 9.0])
+def test_crawler_unsticks_from_corner(offset):
+    gmap = field(40, 24)
+    gmap.tiles[9][12] = ground.ROCK
+    gmap.pad = (512, 325 + offset)
+    w = world_on(gmap)
+    w.invulnerable_for_tests = True
+    crawler = Enemy("crawler", 362, 325, hp_mult=100.0)
+    w.enemies.append(crawler)
+    run(w, 5.0)
+    assert math.dist(crawler.pos, w.pilot.pos) < 40
+
+
+@pytest.mark.parametrize("dt", [1 / 60, 1 / 30, 1 / 20])
+def test_shots_never_tunnel(dt):
+    gmap = field(30, 20)
+    for row in range(20):
+        gmap.tiles[row][10] = ground.ROCK
+    gmap.pad = at(5, 10)
+    w = world_on(gmap)
+    target = Enemy("crawler", *at(8, 10), hp_mult=1000.0)
+    target.frozen = True
+    w.enemies.append(target)
+    beyond = []
+    for _ in range(round(5 / dt)):
+        w.step(dt, GroundInputs(fire=True, aim=at(20, 10)))
+        beyond += [s for s in w.shots if s.x > 10 * 32]
+    hits = (target.body.max_hp - target.body.hp) / ground.WEAPONS["sidearm"].damage
+    assert not beyond and hits >= 19  # every round in 5 s hit the crawler first
+
+
+def test_move_order_onto_rock_settles():
+    gmap = field()
+    gmap.tiles[10][20] = ground.ROCK
+    w = world_on(gmap)
+    s = Survivor(w.pilot.x + 50, w.pilot.y, state="follow")
+    w.survivors.append(s)
+    w.step(DT, GroundInputs(order=("move", *at(20, 10))))
+    run(w, 10.0)
+    assert s.state == "hold" and not gmap.blocked(*s.pos)

@@ -114,7 +114,7 @@ class FlightScene(Scene):
             from space_shooter.scenes.pause import PauseScene
 
             self.game.scenes.push(PauseScene(self.game))
-        elif action == "confirm":
+        elif action in ("confirm", "fire"):  # the gamepad's A button docks too
             self.dock()
         elif action == "dash" and self.run.player.start_dash(self.game.move_vector()):
             dx, dy = self.run.player.dash_dir

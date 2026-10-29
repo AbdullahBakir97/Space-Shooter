@@ -255,7 +255,7 @@ ruff check . && ruff format --check .
 pytest
 ```
 
-The suite (400 tests) runs with SDL's dummy video and audio drivers, so it
+The suite (409 tests) runs with SDL's dummy video and audio drivers, so it
 passes on CI runners and headless machines. CI runs lint, format and tests on
 Python 3.11 to 3.13.
 
