@@ -1,0 +1,63 @@
+[
+  {"id": "a1_open", "speaker": "pilot", "when": "always", "priority": 100, "lines": [
+    "Fleet channel. This is Tug Nine.",
+    "The carriers are gone. The star is going with them.",
+    "Starting salvage. Somebody should be listening."]},
+  {"id": "a1_empty_channel", "speaker": "pilot", "when": "reached >= 1", "priority": 10, "lines": [
+    "Nobody answered.",
+    "I keep the channel open. It makes the cockpit less quiet."]},
+  {"id": "a1_ash", "speaker": "fleet", "when": "reached >= 1", "priority": 12, "lines": [
+    "...ash shelf... visibility nil... do not engage...",
+    "(automated fleet beacon, looping)"]},
+  {"id": "a1_loop2", "speaker": "pilot", "when": "loop >= 2", "priority": 50, "lines": [
+    "I died out there. I remember it.",
+    "The hull is whole. The clock says nothing happened."]},
+  {"id": "a1_loop3", "speaker": "pilot", "when": "loop >= 3", "priority": 40, "lines": [
+    "Third time through the same hour.",
+    "Same ash. Same wrecks. Same quiet."]},
+  {"id": "a1_echo_seen", "speaker": "pilot", "when": "loop >= 2 and reached >= 1", "priority": 45, "lines": [
+    "There's a ship on my wing with my registry.",
+    "It flies the way I flew. It doesn't answer either."]},
+  {"id": "a1_echo_distrust", "speaker": "pilot", "when": "loop >= 4", "priority": 30, "lines": [
+    "The ghosts shoot where I shot.",
+    "I don't know if they're helping, or just remembering."]},
+  {"id": "a1_first_echo_lost", "speaker": "pilot", "when": "flag:first_echo_lost", "priority": 60, "lines": [
+    "One of them broke apart in front of me.",
+    "It didn't come back this loop. That one is really gone."]},
+  {"id": "a1_graveyard", "speaker": "fleet", "when": "reached >= 2", "priority": 20, "lines": [
+    "Graveyard. Forty-one hulls logged. No survivors.",
+    "Recovery crews: strip what you can. Leave the names."]},
+  {"id": "a1_picket", "speaker": "fleet", "when": "reached >= 3", "priority": 20, "lines": [
+    "Picket line holding. Picket line holding. Picket line",
+    "(signal ends)"]},
+  {"id": "a1_last_light", "speaker": "pilot", "when": "reached >= 4", "priority": 25, "lines": [
+    "The star flares when it breathes.",
+    "Get behind something dead. That's the whole trick now."]},
+  {"id": "a1_warden_seen", "speaker": "unknown", "when": "flag:warden_seen", "priority": 70, "lines": [
+    "Something is sitting at the edge of the system.",
+    "It was there before the fleet arrived."]},
+  {"id": "a1_warden_speaks", "speaker": "warden", "when": "flag:warden_seen and loop >= 3", "priority": 65, "lines": [
+    "You keep returning, little tug.",
+    "Every time, you bring more of yourself."]},
+  {"id": "a1_loop6", "speaker": "pilot", "when": "loop >= 6", "priority": 15, "lines": [
+    "I've stopped counting the hours. I count the ghosts."]},
+  {"id": "a1_loop10", "speaker": "pilot", "when": "loop >= 10", "priority": 15, "lines": [
+    "My hands know the shelf better than my name.",
+    "Some nights I wonder which of us is the echo."]},
+  {"id": "a1_echoes_lost3", "speaker": "pilot", "when": "echoes_lost >= 3", "priority": 35, "lines": [
+    "Three of them are gone now.",
+    "I fly a little closer to the ones that are left."]},
+  {"id": "a1_fleet_static", "speaker": "fleet", "when": "loop >= 8", "priority": 5, "lines": [
+    "...Tug Nine, if you can hear this, do not...",
+    "(the rest is static. It always is.)"]},
+  {"id": "a1_end_1", "speaker": "warden", "when": "flag:act1_complete", "priority": 90, "lines": [
+    "So. You break the lock.",
+    "The loop was never built to hold you.",
+    "It was built to hold what is coming."]},
+  {"id": "a1_end_2", "speaker": "pilot", "when": "flag:act1_complete", "priority": 89, "lines": [
+    "The eye went dark.",
+    "The clock is moving. I don't know what happens next."]},
+  {"id": "a1_end_3", "speaker": "unknown", "when": "flag:act1_complete", "priority": 88, "lines": [
+    "Loop seal broken. Notifying the builders.",
+    "END OF ACT ONE"]}
+]

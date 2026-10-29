@@ -7,13 +7,25 @@ Thanks for considering a contribution!
 1. Fork the repository.
 2. Create a topic branch: `git checkout -b feature/short-name`.
 3. Make your change. Keep diffs focused — small PRs land faster.
-4. Run any local checks (tests, linters) before opening the PR.
+4. Run the local checks before opening the PR:
+
+   ```bash
+   pip install -r requirements.txt -r requirements-dev.txt
+   ruff check . && ruff format --check . && pytest
+   ```
+
+   The test suite runs headless (`SDL_VIDEODRIVER=dummy`), so no display or
+   sound card is needed.
 5. Open a pull request describing **what** changed and **why**.
 
 ## Style
 
 - Keep code readable; use clear names over clever ones.
-- Match the file's surrounding conventions.
+- Match the file's surrounding conventions. Code is formatted with `ruff format`.
+- Gameplay tuning lives in `space_shooter/config.py`; prefer changing a constant there over hard-coding a number.
+- Colours come only from `space_shooter/palette.py`. Keep the palette grim: no bright arcade colours.
+- Story text lives in `space_shooter/data/act1_logs.json`. Logs are at most three lines and use the conditions documented in `space_shooter/story.py`.
+- Rules that can be tested without a window (`save`, `salvage`, `encounters`, `echoes`, `story`) must not import pygame.
 - Keep commit messages concise, in the imperative mood
   (e.g. `Add export option`, not `added export option`).
 
