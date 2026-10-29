@@ -636,3 +636,41 @@ def test_dash_ignored_while_paused(game):
     game.scenes.top.handle_action("dash")
     scene.handle_action("dash")  # even if routed straight to the scene underneath
     assert not scene.player.dash.active and scene.player.dash.charges == 1
+
+
+def spawn_one(scene, kind):
+    from space_shooter.encounters import Spawn
+
+    before = set(scene.enemies)
+    scene._spawn(Spawn(0.0, kind, 0.5))
+    return next(e for e in scene.enemies if e not in before)
+
+
+def test_drone_unarmed_in_cold_wake(game):
+    assert spawn_one(start_at(game, 0), "drone").armed is False
+    assert spawn_one(start_at(game, 1), "drone").armed is True
+    assert spawn_one(start_at(game, 0), "gunner").armed is True
+
+
+def test_echo_pressure_scales_spawns(game):
+    game.save.echoes = [seeded_trace(n, x=150.0 + n * 100).to_data() for n in (1, 2, 3)]
+    scene = start_at(game, 0)
+    run_frames(game, 2)
+    assert len(scene.live_echoes()) == 3
+    enemy = spawn_one(scene, "gunner")
+    base = scene.difficulty.enemy_fire_rate
+    assert enemy.fire_mult == pytest.approx(base * 1.30)
+    assert enemy.max_hp == round(3 * scene.difficulty.enemy_hp * scene.hull_mult * 1.24)
+
+
+def test_no_pressure_without_echoes(game):
+    scene = start_at(game, 0)
+    enemy = spawn_one(scene, "gunner")
+    assert enemy.fire_mult == pytest.approx(scene.difficulty.enemy_fire_rate)
+
+
+def test_warden_phase_drop_is_scarred(game):
+    scene = start_at(game, 0)
+    scene.drops.empty()
+    scene.warden_phase_drop((400, 200))
+    assert [d.code[-1] for d in scene.drops] == ["*"]

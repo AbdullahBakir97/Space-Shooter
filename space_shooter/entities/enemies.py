@@ -21,14 +21,22 @@ from space_shooter.config import (
 from space_shooter.palette import BONE
 
 FLASH_TIME = 0.08
+FIRE_LINE = 40  # nobody fires until they are on screen
+DRONE_PERIOD = (2.6, 3.6)
+ZIGZAG_PERIOD = 3.0
+ZIGZAG_SPREAD = 0.25
+DIVER_BURST_SPREAD = 0.1
 
 
 class Enemy(pygame.sprite.Sprite):
     kind = "drone"
     scale = SPRITE_SCALE
 
-    def __init__(self, x: float, hp_mult: float = 1.0, speed_mult: float = 1.0, fire_mult: float = 1.0) -> None:
+    def __init__(
+        self, x: float, hp_mult: float = 1.0, speed_mult: float = 1.0, fire_mult: float = 1.0, armed: bool = True
+    ) -> None:
         super().__init__()
+        self.armed = armed
         self.frames = self._load_frames()
         self.flash_frames = [assets.silhouette(n, BONE, self.scale) for n in assets.SPRITE_NAMES["enemy"]]
         self.image = self.frames[0]
@@ -46,6 +54,22 @@ class Enemy(pygame.sprite.Sprite):
 
     def _load_frames(self) -> list[pygame.Surface]:
         return [procgen.scarred_variant(n, self.kind, self.scale) for n in assets.SPRITE_NAMES["enemy"]]
+
+    # -- firing ---------------------------------------------------------------
+    @property
+    def can_fire(self) -> bool:
+        return self.armed and not self.retreating and self.y > FIRE_LINE
+
+    def shoot_at(self, world, offsets: tuple[float, ...] = (0.0,)) -> None:
+        """Fire one round per angle offset toward the world's aim point (armour first)."""
+        px, py = world.aim_point()
+        base = math.atan2(py - self.y, px - self.x)
+        origin = (self.x, self.rect.bottom)
+        for off in offsets:
+            angle = base + off
+            world.fire_enemy_bullet(
+                origin, (math.cos(angle) * ENEMY_BULLET_SPEED, math.sin(angle) * ENEMY_BULLET_SPEED)
+            )
 
     # -- damage --------------------------------------------------------------
     def hit(self, damage: int) -> bool:
@@ -83,6 +107,19 @@ class Enemy(pygame.sprite.Sprite):
 class Drone(Enemy):
     kind = "drone"
 
+    def __init__(self, x: float, **kw) -> None:
+        super().__init__(x, **kw)
+        self.fire_timer = DRONE_PERIOD[0]
+
+    def move(self, dt: float, world) -> None:
+        super().move(dt, world)
+        if not self.can_fire:
+            return
+        self.fire_timer -= dt * self.fire_mult
+        if self.fire_timer <= 0:
+            self.fire_timer = world.rng.uniform(*DRONE_PERIOD)
+            self.shoot_at(world)
+
 
 class Zigzag(Enemy):
     kind = "zigzag"
@@ -91,10 +128,17 @@ class Zigzag(Enemy):
         super().__init__(x, **kw)
         self.origin_x = x
         self.amplitude = min(x - 30, WIDTH - 30 - x, 140)
+        self.fire_timer = ZIGZAG_PERIOD
 
     def move(self, dt: float, world) -> None:
         self.y += self.speed * 0.8 * dt
         self.x = self.origin_x + math.sin(self.age * 3.0) * self.amplitude
+        if not self.can_fire:
+            return
+        self.fire_timer -= dt * self.fire_mult
+        if self.fire_timer <= 0:
+            self.fire_timer += ZIGZAG_PERIOD
+            self.shoot_at(world, (-ZIGZAG_SPREAD, 0.0, ZIGZAG_SPREAD))
 
 
 class Diver(Enemy):
@@ -126,6 +170,8 @@ class Diver(Enemy):
                 dive_speed = self.speed * 3.2
                 self.dive_vx, self.dive_vy = dx / dist * dive_speed, max(dy / dist, 0.35) * dive_speed
                 self.state = "dive"
+                if self.can_fire:  # a parting burst as it commits to the dive
+                    self.shoot_at(world, (-DIVER_BURST_SPREAD, 0.0, DIVER_BURST_SPREAD))
         else:
             self.x += self.dive_vx * dt
             self.y += self.dive_vy * dt
@@ -155,6 +201,8 @@ class Gunner(Enemy):
         if self.x < 40 or self.x > WIDTH - 40:
             self.dir *= -1
             self.x = min(WIDTH - 40, max(40, self.x))
+        if not self.can_fire:
+            return
         self.fire_timer -= dt * self.fire_mult
         if self.fire_timer <= 0:
             self.fire_timer = world.rng.uniform(1.4, 2.2)

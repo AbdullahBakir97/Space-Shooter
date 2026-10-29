@@ -10,6 +10,8 @@ import pygame
 from space_shooter import procgen
 from space_shooter.config import (
     DIFFICULTIES,
+    ECHO_PRESSURE_FIRE,
+    ECHO_PRESSURE_HULL,
     HEIGHT,
     LOW_HEALTH_THRESHOLD,
     PLAYER_COLLISION_DAMAGE,
@@ -401,10 +403,12 @@ class GameplayScene(Scene):
 
     def _spawn(self, spawn: Spawn) -> None:
         x = SPAWN_MARGIN + spawn.x_frac * (WIDTH - 2 * SPAWN_MARGIN)
+        live = len(self.live_echoes())  # a strong roster draws a stronger response
         kwargs = dict(
-            hp_mult=self.difficulty.enemy_hp * self.hull_mult,
+            hp_mult=self.difficulty.enemy_hp * self.hull_mult * (1 + ECHO_PRESSURE_HULL * live),
             speed_mult=self.difficulty.enemy_speed,
-            fire_mult=self.difficulty.enemy_fire_rate,
+            fire_mult=self.difficulty.enemy_fire_rate * (1 + ECHO_PRESSURE_FIRE * live),
+            armed=not (spawn.kind == "drone" and self.director.index == 0),
         )
         enemy = ENEMY_CLASSES[spawn.kind](x, **kwargs)
         if spawn.kind == "warden":
@@ -412,6 +416,11 @@ class GameplayScene(Scene):
             self.game.save.flags.add("warden_seen")
             self.game.persist()
         self.enemies.add(enemy)
+
+    def warden_phase_drop(self, center: tuple[float, float]) -> None:
+        """The Warden sheds a scarred part each time it breaks into a new phase."""
+        self.drops.add(Drop(self.rng.choice(list(PART_TYPES)) + "*", center))
+        self.shake.add(SHAKE_EXPLOSION)
 
     def spawn_debris_ring(self, center: tuple[float, float], count: int) -> None:
         """Wreckage thrown out in a ring (the Warden's collapse phase)."""

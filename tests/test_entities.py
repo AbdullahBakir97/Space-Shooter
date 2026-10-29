@@ -313,3 +313,47 @@ class TestDash:
         p.loadout.slots["aft_l"] = None
         p.update(0.5)
         assert p.dash.charges == 0 and p.start_dash((1, 0)) is False
+
+
+def parked(enemy, y=200.0):
+    enemy.y, enemy.speed = y, 0.0
+    return enemy
+
+
+@pytest.mark.usefixtures("display")
+class TestEnemyFire:
+    def run(self, enemy, seconds, world=None):
+        world = world or FakeWorld()
+        pygame.sprite.Group(enemy)
+        for _ in range(int(seconds * 60)):
+            enemy.update(1 / 60, world)
+        return world
+
+    def test_unarmed_drone_never_fires(self):
+        world = self.run(parked(Drone(400.0, armed=False)), 8)
+        assert world.shots == []
+
+    def test_drone_fires_aimed_when_armed(self):
+        world = self.run(parked(Drone(200.0)), 4)
+        assert world.shots
+        (x, y), (vx, vy), _ = world.shots[0]
+        tx, ty = world.player_pos
+        assert vy > 0 and (vx > 0) == (tx > x)
+
+    def test_zigzag_fires_spread(self):
+        z = parked(ENEMY_CLASSES["zigzag"](400.0))
+        world = self.run(z, 3.1)
+        assert len(world.shots) == 3
+        angles = sorted(math.atan2(v[1], v[0]) for _, v, _ in world.shots)
+        assert angles[2] - angles[0] == pytest.approx(0.5, abs=1e-6)
+
+    def test_diver_bursts_on_dive(self):
+        d = Diver(400.0)
+        d.y, d.state, d.hover = Diver.HOVER_Y, "hover", Diver.HOVER_TIME - 0.01
+        world = self.run(d, 0.05)
+        assert d.state == "dive" and len(world.shots) == 3
+
+    def test_enemies_hold_fire_off_screen(self):
+        for kind in ("drone", "zigzag", "gunner"):
+            world = self.run(parked(ENEMY_CLASSES[kind](400.0), y=20.0), 6)
+            assert world.shots == [], kind

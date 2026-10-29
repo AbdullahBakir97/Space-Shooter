@@ -11,26 +11,28 @@ from space_shooter.config import ENEMY_BULLET_SPEED, WARDEN_BASE_HP, WIDTH
 from space_shooter.echoes import densest_cluster
 from space_shooter.entities.enemies import Enemy
 
-SWEEP_PERIOD = 0.9
+SWEEP_PERIOD = 0.75
 SWEEP_SHOTS = 7
 SWEEP_STEP = 0.35
 SWEEP_SPREAD = 0.18
-HUNT_PERIOD = 1.1
+HUNT_PERIOD = 0.95
 HUNT_SHOTS = 5
 HUNT_SPREAD = 0.06
-RING_PERIOD = 3.0
+RING_PERIOD = 2.6
 RING_SIZE = 12
 EXPOSE_TIME = 1.5
-COLLAPSE_SHOT_PERIOD = 1.4
+COLLAPSE_SHOT_PERIOD = 1.1
 FIRST_SHOT = 0.9
 
 
 class Warden(Enemy):
     kind = "warden"
 
-    def __init__(self, x: float, hp_mult: float = 1.0, speed_mult: float = 1.0, fire_mult: float = 1.0) -> None:
+    def __init__(
+        self, x: float, hp_mult: float = 1.0, speed_mult: float = 1.0, fire_mult: float = 1.0, armed: bool = True
+    ) -> None:
         self.body, self.eye = procgen.warden_sprites()
-        super().__init__(x, hp_mult, speed_mult, fire_mult)
+        super().__init__(x, hp_mult, speed_mult, fire_mult, armed)
         self.is_boss = True
         mask = pygame.mask.from_surface(self.body)
         self.flash_frames = [mask.to_surface(setcolor=(210, 205, 196, 255), unsetcolor=(0, 0, 0, 0))]
@@ -46,6 +48,7 @@ class Warden(Enemy):
         self.sweep_angle = math.pi / 2
         self.hunt_echoes = True
         self.arrived = False
+        self.last_phase = 1
 
     def _load_frames(self) -> list[pygame.Surface]:
         return [self.body]
@@ -79,6 +82,9 @@ class Warden(Enemy):
             if not self.arrived:
                 return
         phase = self.phase
+        if phase > self.last_phase:  # breaking into a new phase sheds a scarred part
+            self.last_phase = phase
+            world.warden_phase_drop((self.x, self.y))
         self.x += self.dir * self.speed * (0.45 + 0.25 * phase) * dt
         self.y = self.target_y + math.sin(self.age * 1.5) * 25
         half = self.rect.width / 2 + 4

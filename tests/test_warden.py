@@ -19,6 +19,7 @@ class FakeWorld:
         self.rng = random.Random(1)
         self.shots = []
         self.rings = []
+        self.phase_drops = []
         self.enemies = []
 
     def echo_positions(self):
@@ -32,6 +33,9 @@ class FakeWorld:
 
     def spawn_debris_ring(self, center, count):
         self.rings.append((center, count))
+
+    def warden_phase_drop(self, center):
+        self.phase_drops.append(center)
 
 
 def run(w, world, seconds):
@@ -122,3 +126,29 @@ def test_warden_sprite_symmetric():
     for y in range(body.get_height()):
         for x in range(body.get_width() // 2):
             assert body.get_at((x, y)) == body.get_at((body.get_width() - 1 - x, y))
+
+
+def test_warden_numbers():
+    from space_shooter.entities import warden
+
+    assert (warden.SWEEP_PERIOD, warden.HUNT_PERIOD, warden.RING_PERIOD, warden.COLLAPSE_SHOT_PERIOD) == (
+        0.75,
+        0.95,
+        2.6,
+        1.1,
+    )
+
+
+def test_warden_phase_changes_drop_scarred_parts():
+    world = FakeWorld()
+    w = Warden(400.0)
+    w.y = w.target_y
+    run(w, world, 0.5)
+    assert world.phase_drops == []
+    w.hp = int(w.max_hp * 0.5)
+    run(w, world, 0.2)
+    assert len(world.phase_drops) == 1
+    w.hp = int(w.max_hp * 0.2)
+    run(w, world, 0.2)
+    run(w, world, 0.2)
+    assert len(world.phase_drops) == 2
