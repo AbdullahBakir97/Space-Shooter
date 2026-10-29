@@ -124,7 +124,7 @@ ENCOUNTERS: tuple[Encounter, ...] = (
             _e(62, "vee", "zigzag", 3, 0.4),
             _e(68, "scatter", "diver", 4),
         ),
-        hazards=("debris",),
+        hazards=("debris", "hulks"),
         moments=((45.0, "flare"),),
     ),
     Encounter(WARDEN_INDEX, "THE WARDEN", None, (_e(0, "single", "warden", 1),)),

@@ -52,6 +52,7 @@ FLARE_PLAYER_DAMAGE = 30
 FLARE_ENEMY_HITS = 2
 RADIO_TIME = 3.0
 ECHO_RAM_DAMAGE = 2
+ECHO_RAM_COOLDOWN = 0.6  # one ram per contact, like the player's brief invulnerability
 ASH_PERIOD = 5.0
 DEBRIS_PERIOD = 1.2
 
@@ -427,11 +428,15 @@ class GameplayScene(Scene):
 
     # -- combat --------------------------------------------------------------
     def _collisions(self) -> None:
-        for hazard, bullets in pygame.sprite.groupcollide(self.hazards, self.player_bullets, False, True).items():
+        for hazard, bullets in pygame.sprite.groupcollide(self.hazards, self.player_bullets, False, False).items():
             if isinstance(hazard, Hulk):
+                for b in bullets:
+                    b.kill()
                 if hazard.hit(sum(b.damage for b in bullets)):
                     self._break_hulk(hazard, rare=hazard.rare_drop)
             elif isinstance(hazard, Debris):
+                for b in bullets:
+                    b.kill()
                 hazard.kill()
                 burst(self.particles, hazard.rect.center, 5, (RUST, ASH), 120, 0.3, 3, self.rng)
         blockers = [h for h in self.hazards if h.blocks_bullets]
@@ -464,7 +469,10 @@ class GameplayScene(Scene):
                 self._lose_echo(echo)
             if not echo.alive():
                 continue
+            if echo.ram_cooldown > 0:
+                continue
             for enemy in pygame.sprite.spritecollide(echo, self.enemies, False, pygame.sprite.collide_circle):
+                echo.ram_cooldown = ECHO_RAM_COOLDOWN
                 if not enemy.is_boss and enemy.hit(1):
                     self._kill_enemy(enemy)
                 if echo.hit(ECHO_RAM_DAMAGE):

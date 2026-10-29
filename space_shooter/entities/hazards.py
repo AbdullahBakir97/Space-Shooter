@@ -42,7 +42,7 @@ class Hulk(Hazard):
     blocks_bullets = True
 
     def __init__(self, pos, hp: int = 8, rare_drop: bool = False, seed: int = 0) -> None:
-        super().__init__(procgen.hulk_sprite(seed % 5), pos, (0.0, 6.0))
+        super().__init__(procgen.hulk_sprite(seed % 5), pos, (0.0, 1.5))
         self.hp = hp
         self.rare_drop = rare_drop
 

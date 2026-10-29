@@ -54,15 +54,19 @@ def _draw_schematic(surface: pygame.Surface, scene) -> None:
     )
 
 
+def roster_status(scene) -> list[tuple[int, bool]]:
+    """(loop, lost) for each echo flying this loop. Finishing a recording is not being lost."""
+    return [(loop, loop in scene.echoes_lost) for loop in scene.roster]
+
+
 def _draw_roster(surface: pygame.Surface, scene) -> None:
-    alive = {e.loop for e in scene.echoes if e.alive()}
     icon = assets.silhouette("player0", STEEL, 2)
     lost_icon = assets.silhouette("player0", STEEL_DIM, 2)
     x = WIDTH - 20
-    for loop in reversed(scene.roster):
+    for _loop, lost in reversed(roster_status(scene)):
         x -= icon.get_width() + 6
-        surface.blit(icon if loop in alive else lost_icon, (x, 16))
-        if loop not in alive:
+        surface.blit(lost_icon if lost else icon, (x, 16))
+        if lost:
             pygame.draw.line(surface, RUST, (x, 16), (x + icon.get_width(), 16 + icon.get_height()), 2)
     if scene.roster:
         draw_text(surface, "ECHOES", 14, (WIDTH - 20, 52), ASH, "topright", shadow=False)

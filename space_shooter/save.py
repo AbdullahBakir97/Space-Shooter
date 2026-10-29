@@ -20,6 +20,7 @@ LEGACY_SCORES = "high_scores.json"
 SAVE_VERSION = 1
 MAX_RECORDS = 10
 RESET_NOTICE = "Save data was unreadable and has been reset. A backup was kept."
+DAMAGED_NOTICE = "Some damaged echo recordings or records were removed from the save."
 
 # (encounter index, time within encounter, x, y, fired since previous sample)
 Sample = tuple[int, float, float, float, bool]
@@ -81,16 +82,46 @@ def add_record(data: SaveData, record: Record) -> int | None:
     return None
 
 
+def _valid_echo(item) -> EchoData | None:
+    """Decode an echo fully now, so damage is caught at load time and not mid-game."""
+    try:
+        echo = EchoData(**item)
+        unpack_samples(echo.samples)
+        for entry in echo.loadouts:
+            int(entry["encounter"]), float(entry["t"]), dict(entry["parts"])
+        if not all(isinstance(v, (int, float)) for v in (echo.loop, echo.reached, echo.duration)):
+            return None
+    except (TypeError, ValueError, KeyError, struct.error):
+        return None
+    return echo
+
+
+def _valid_record(item) -> Record | None:
+    try:
+        record = Record(**item)
+    except TypeError:
+        return None
+    numbers_ok = all(isinstance(v, int) for v in (record.loop, record.reached, record.salvage))
+    if not numbers_ok or not isinstance(record.time, (int, float)) or not isinstance(record.difficulty, str):
+        return None
+    return record
+
+
 def _from_dict(raw: dict) -> SaveData:
-    return SaveData(
+    echoes = [_valid_echo(e) for e in raw.get("echoes", [])]
+    records = [_valid_record(r) for r in raw.get("records", [])]
+    data = SaveData(
         version=int(raw.get("version", SAVE_VERSION)),
         loop=max(1, int(raw.get("loop", 1))),
-        echoes=[EchoData(**e) for e in raw.get("echoes", [])],
+        echoes=[e for e in echoes if e is not None],
         flags=set(raw.get("flags", [])),
         read_logs=list(raw.get("read_logs", [])),
-        records=[Record(**r) for r in raw.get("records", [])],
+        records=[r for r in records if r is not None],
         act1_complete=bool(raw.get("act1_complete", False)),
     )
+    if None in echoes or None in records:
+        data.notice = DAMAGED_NOTICE
+    return data
 
 
 def _migrate_legacy(directory: Path) -> list[Record]:

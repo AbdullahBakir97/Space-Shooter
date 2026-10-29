@@ -47,7 +47,7 @@ def test_script_kinds(idx, kinds):
 def test_hazards_and_moments():
     assert ENCOUNTERS[1].hazards == ("ash",) and ENCOUNTERS[1].moments == ((25.0, "blackout"),)
     assert ENCOUNTERS[2].hazards == ("hulks",) and ENCOUNTERS[2].moments == ((30.0, "hulk_breach"),)
-    assert ENCOUNTERS[4].hazards == ("debris",) and ENCOUNTERS[4].moments == ((45.0, "flare"),)
+    assert ENCOUNTERS[4].hazards == ("debris", "hulks") and ENCOUNTERS[4].moments == ((45.0, "flare"),)
     assert ENCOUNTERS[0].moments == ((0.0, "first_drop"),)
 
 

@@ -19,6 +19,8 @@ class HangarScene(Scene):
         super().__init__(game)
         self.time = 0.0
         self.notice: str | None = None
+        traces = [EchoTrace.from_data(d) for d in game.save.echoes]
+        self._roster = [(f"ECHO {t.loop}", t.reached) for t in select_roster(traces)]
         self.menu = MenuList(
             [
                 MenuItem("LAUNCH", self.launch),
@@ -66,8 +68,7 @@ class HangarScene(Scene):
         self.game.scenes.push(SettingsScene(self.game))
 
     def roster_names(self) -> list[str]:
-        traces = [EchoTrace.from_data(d) for d in self.game.save.echoes]
-        return [f"ECHO {t.loop}" for t in select_roster(traces)]
+        return [name for name, _ in self._roster]
 
     # -- scene protocol ------------------------------------------------------
     def handle_action(self, action: str) -> None:

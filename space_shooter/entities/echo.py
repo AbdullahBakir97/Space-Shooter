@@ -22,6 +22,7 @@ class Echo(pygame.sprite.Sprite):
         self.loop = trace.loop
         self.playback = EchoPlayback(trace)
         self.hp = ECHO_HP
+        self.ram_cooldown = 0.0
         self.rig = PartRig()
         self.loadout = Loadout()
         self._codes: dict[str, str] = {}
@@ -42,6 +43,7 @@ class Echo(pygame.sprite.Sprite):
         self.active = False
 
     def update(self, dt: float, encounter: int, t_rel: float, world) -> None:
+        self.ram_cooldown = max(0.0, self.ram_cooldown - dt)
         if self.fading > 0:
             self.fading -= dt
             self.image = self.base_image.copy()
