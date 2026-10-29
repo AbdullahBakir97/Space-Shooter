@@ -80,13 +80,13 @@ def test_route_rules(system):
     assert valid_route(system, s, ["o3"])  # adjacent to ground you hold
 
 
-def test_gate_locked_until_four_middle(system):
+def test_gate_locked_until_every_middle_world(system):
     s = new_campaign(system)
-    for n in ("m1", "m2", "m3"):
+    for n in ("m1", "m2", "m3", "m5"):
         s.owner[n] = "player"
     assert locked(system, s, "c1") and locked(system, s, "c2")
     assert not valid_route(system, s, ["c1"])
-    s.owner["m5"] = "player"
+    s.owner["m4"] = "player"
     assert not locked(system, s, "c1") and locked(system, s, "c2")
     assert valid_route(system, s, ["c1", "c2"])
 
@@ -126,26 +126,41 @@ def test_swarm_spreads_toward_home(system):
 
 def test_spread_count_grows(system):
     s = new_campaign(system)
-    assert [spread_count(CampaignState(**{**s.__dict__, "turn": t})) for t in (0, 3, 4, 8, 20)] == [1, 1, 2, 3, 3]
+    assert [spread_count(CampaignState(**{**s.__dict__, "turn": t})) for t in (0, 5, 6, 12, 20)] == [1, 1, 2, 3, 3]
     s.hive_age = {"o5": 3, "o6": 4}
     assert spread_count(s) == 2
 
 
+def surrounded(system, s):
+    """Leave home and o1 as the swarm's only targets."""
+    s.owner = {n: "swarm" for n in system.nodes}
+    s.owner.update({"home": "player", "o1": "player"})
+
+
 def test_fortified_node_survives_once(system):
     s = new_campaign(system)
-    s.owner.update({"o1": "player", "o3": "swarm"})
+    surrounded(system, s)
     s.fortified.add("o1")
     report = TurnReport()
     swarm_turn(system, s, random.Random(0), report)
     assert s.owner["o1"] == "player" and "o1" not in s.fortified and report.fortify_spent == ["o1"]
 
 
-def test_swarm_takes_player_ground(system):
+def test_swarm_takes_empty_space_before_player_ground(system):
     s = new_campaign(system)
     s.owner.update({"o1": "player", "o3": "swarm"})
     report = TurnReport()
     swarm_turn(system, s, random.Random(0), report)
+    assert s.owner["o1"] == "player" and report.lost == [] and len(report.swarm_took) == 1
+
+
+def test_swarm_takes_player_ground(system):
+    s = new_campaign(system)
+    surrounded(system, s)
+    report = TurnReport()
+    swarm_turn(system, s, random.Random(0), report)
     assert s.owner["o1"] == "swarm" and report.lost == ["o1"] and report.home_threatened
+    assert s.owner["home"] == "player"
 
 
 def test_hive_forms_after_three_turns(system):
@@ -168,9 +183,17 @@ def test_retaken_hive_is_cleared(system):
     assert s.owner["o5"] == "player" and s.hive_age.get("o5", 0) == 0
 
 
-def test_home_taken_loses(system):
+def test_home_is_the_last_stand(system):
     s = new_campaign(system)
     s.owner.update({"o1": "swarm", "o2": "swarm"})
+    report = TurnReport()
+    swarm_turn(system, s, random.Random(0), report)
+    assert s.owner["home"] == "player" and s.status == "active" and report.home_threatened
+
+
+def test_home_taken_loses(system):
+    s = new_campaign(system)
+    s.owner = {n: ("player" if n == "home" else "swarm") for n in system.nodes}
     report = TurnReport()
     swarm_turn(system, s, random.Random(0), report)
     assert s.owner["home"] == "swarm" and s.status == "lost" and report.status == "lost"

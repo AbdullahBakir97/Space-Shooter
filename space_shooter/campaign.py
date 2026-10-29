@@ -14,7 +14,8 @@ SYSTEM_PATH = Path(__file__).resolve().parent / "data" / "system.json"
 HOME = "home"
 GATE = "c1"
 CORE = "c2"
-GATE_NEEDS_MIDDLE = 4
+GATE_NEEDS_MIDDLE = 5
+SPREAD_STEP = 6  # the swarm spreads one location more every this many turns
 MAX_ROUTE = 3
 SWARM_HULL = 1.25
 HIVE_HULL = 1.5
@@ -158,7 +159,7 @@ def new_campaign(system: System) -> CampaignState:
 
 
 def locked(system: System, state: CampaignState, node_id: str) -> bool:
-    """The gate opens once four middle-ring locations are held; the core needs the gate."""
+    """The gate opens once every middle-ring location is held; the core needs the gate."""
     if node_id == GATE:
         held_middle = sum(1 for n in system.ring_ids("middle") if state.owner.get(n) == "player")
         return held_middle < GATE_NEEDS_MIDDLE
@@ -208,7 +209,7 @@ def route_encounters(system: System, state: CampaignState, route: list[str]) -> 
 
 def spread_count(state: CampaignState) -> int:
     hives = sum(1 for n in state.owner if state.is_hive(n))
-    return min(3, 1 + state.turn // 4) + hives // 2
+    return min(3, 1 + state.turn // SPREAD_STEP) + hives // 2
 
 
 def swarm_turn(system: System, state: CampaignState, rng: random.Random, report: TurnReport) -> None:
@@ -223,6 +224,11 @@ def swarm_turn(system: System, state: CampaignState, rng: random.Random, report:
     for _ in range(spread_count(state)):
         swarm = {n for n, o in state.owner.items() if o == "swarm"}
         candidates = {n for s in swarm for n in system.neighbours(s)} - swarm
+        neutral = {n for n in candidates if state.owner[n] == "neutral"}
+        if neutral:
+            candidates = neutral  # the swarm spreads into empty space before it turns on your ground
+        elif len(candidates) > 1:
+            candidates.discard(HOME)  # home is the last stand: it falls only when nothing else is left to take
         if not candidates:
             break
         closest = min(system.distance_to_home(n) for n in candidates)

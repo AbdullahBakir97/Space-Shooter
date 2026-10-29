@@ -97,7 +97,7 @@ def test_warden_kill_wins_campaign(game):
     from space_shooter.entities.bullets import PlayerBullet
 
     state = game.campaign()
-    for n in ("m1", "m2", "m3", "m4", "c1"):
+    for n in ("m1", "m2", "m3", "m4", "m5", "c1"):
         state.owner[n] = "player"
     game.store_campaign(state)
     scene = launch(game, ["c2"])
@@ -119,7 +119,7 @@ def test_war_lost_resets_and_keeps_echoes(game):
 
     game.save.echoes = [seeded_trace(9).to_data()]
     state = game.campaign()
-    state.owner.update({"o1": "swarm", "o2": "swarm"})
+    state.owner.update({n: "swarm" for n in state.owner if n != "home"})  # home is all that is left
     game.store_campaign(state)
     scene = launch(game, ["o1"])
     run_frames(game, 1)
@@ -145,3 +145,41 @@ def test_campaign_flags_are_set(game):
     clear_current(game, scene)
     run_frames(game, 90)
     assert "node_claimed" in game.save.flags
+
+
+def test_headless_campaign_autopilot(game):
+    """Five turns through the real screens: plan on the map, fly, read the card, back to the hangar."""
+    from space_shooter.campaign import valid_route
+    from space_shooter.scenes.hangar import HangarScene
+    from space_shooter.scenes.map import MapScene
+    from tests.helpers import press, select
+
+    game.save.read_logs.append("a1_open")
+    game.scenes.clear_to(HangarScene(game))
+    start = dict(game.campaign().owner)
+    for turn in range(5):
+        select(game, "LAUNCH")
+        m = game.scenes.top
+        assert isinstance(m, MapScene)
+        m.selected = next(n for n in sorted(game.system.nodes) if valid_route(game.system, m.state, [n]))
+        m.toggle()
+        m.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_l, unicode=""))
+        scene = game.scenes.top
+        assert isinstance(scene, GameplayScene)
+        if turn % 2 == 0:
+            clear_current(game, scene)
+            run_frames(game, 90)
+        else:
+            run_frames(game, 200)
+            die(game, scene)
+        for _ in range(20):  # the death beat plays before the card
+            if isinstance(game.scenes.top, LoopEndScene):
+                break
+            run_frames(game, 30)
+        assert isinstance(game.scenes.top, LoopEndScene)
+        while not isinstance(game.scenes.top, HangarScene):
+            press(game, "confirm")
+            run_frames(game, 2)
+    state = game.campaign()
+    assert state.turn == 5 and state.owner != start
+    assert sum(1 for o in state.owner.values() if o == "player") >= 2

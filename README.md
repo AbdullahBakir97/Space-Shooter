@@ -49,8 +49,37 @@ When the hull takes a hit, there is a 35% chance a part is knocked off
 instead. It drifts away for six seconds and you can fly back for it.
 Scarred parts, marked in ember, are 1.5 times as strong.
 
-**The loop.** Act 1 is five encounters and a boss, with a quiet drift between
-each one where the radio sometimes speaks.
+**The war.** Each loop is one turn of a war for the star system. LAUNCH
+opens the map: fourteen locations on three rings, linked by lanes. Plan a
+route of up to three stops, starting next to ground you hold, and fly it.
+Each stop plays as one of the encounters below. Every stop you fully clear
+becomes yours, even if you die further on, and clearing the whole route ends
+the loop.
+
+- **The swarm** spreads after every loop, faster as the war drags on. It takes
+  empty space first and turns on your ground when nothing is left. Its ground
+  fights back harder (+25% enemy hull). Ground it holds for three turns
+  becomes a hive (+50% hull and a faster script), and hives spread it further.
+- **Salvage** from each run, plus a yield from every location you hold, goes
+  into a war chest. Spend it in the SHIPYARD on up to two parts fitted at your
+  next launch (800 each), or fortify a held location from the map (1000) so it
+  survives one attack.
+- **Winning:** hold all five middle worlds to open SHELF GATE, take it, and kill
+  the Warden at WARDEN CORE.
+- **Losing:** ANCHOR STATION, your home, is the last stand. If the swarm takes
+  it, the war is lost and a fresh one starts. Your echoes, records and story
+  carry over.
+
+| Map key | Meaning |
+| --- | --- |
+| Arrows / click | Select a location |
+| Enter | Add it to the route, or remove it and the stops after it |
+| F | Fortify the selected location |
+| L | Launch the route |
+| Esc | Back to the hangar |
+
+**The encounters.** Act 1 has five encounters and a boss, each reached
+through a quiet drift where the radio sometimes speaks.
 
 | Encounter | What waits there |
 | --- | --- |
@@ -71,8 +100,8 @@ fire spreads, divers fire a burst as they dive, and gunners hold a firing line.
 Each echo flying with you makes new enemies 8% tougher and 10% quicker to
 fire, and enemy hulls grow 4% each loop, up to 60%.
 
-**The story** is told through twenty short radio logs that unlock as you loop,
-lose echoes and reach new encounters. The hangar keeps an archive of every log
+**The story** is told through twenty-six short radio logs that unlock as you loop,
+lose echoes, reach new encounters and fight the war. The hangar keeps an archive of every log
 you have heard.
 
 ## Quick start
@@ -138,6 +167,8 @@ space_shooter/
   salvage.py                 hardpoints, parts, pair bonuses, knock-off and drop rules
   dash.py                    thruster dash charges and recharge
   encounters.py              Act 1 encounters as data and their director
+  campaign.py                the war: star system, routes, swarm spread, hives, war chest
+  data/system.json           the fourteen locations and their lanes
   echoes.py                  recording, playback, roster rules, cluster targeting
   story.py                   radio-log conditions and selection
   data/act1_logs.json        the Act 1 radio logs
@@ -147,14 +178,14 @@ space_shooter/
   hud.py / ui.py             cockpit readout and menu widgets
   entities/                  tug, bullets, parts and drops, enemies, the Warden, hazards, echoes
   scenes/salvage_ops.py      claw, tractor, drag field and shrapnel behaviour
-  scenes/                    hangar, gameplay, log panel, archive, records, settings, pause, loop-end card
+  scenes/                    hangar, war map, shipyard, gameplay, log panel, archive, records, settings, pause, loop-end card
 tests/                       headless pytest suite
 images/                      12x16 source sprites
 sounds/                      Juhani Junkala's retro SFX collection (CC0)
 docs/design/            design specs and implementation plans
 ```
 
-The rule modules (`save`, `salvage`, `encounters`, `echoes`, `story`) do not
+The rule modules (`save`, `salvage`, `dash`, `campaign`, `encounters`, `echoes`, `story`) do not
 import pygame, so they are tested directly without a window.
 
 ## Development
@@ -165,7 +196,7 @@ ruff check . && ruff format --check .
 pytest
 ```
 
-The suite (262 tests) runs with SDL's dummy video and audio drivers, so it
+The suite (325 tests) runs with SDL's dummy video and audio drivers, so it
 passes on CI runners and headless machines. CI runs lint, format and tests on
 Python 3.11 to 3.13.
 
@@ -173,8 +204,8 @@ Python 3.11 to 3.13.
 
 Act 1 is the first milestone of a larger campaign:
 
-1. **Strategy map**: a star system where the swarm spreads each turn and you
-   choose where to fight.
+1. **Strategy map** (done): a star system where the swarm spreads each turn
+   and you choose where to fight.
 2. **Ground combat**: top-down drops onto planets with a small squad you
    command.
 3. **The Hive**: a swarm that evolves against how you play, and its queen.

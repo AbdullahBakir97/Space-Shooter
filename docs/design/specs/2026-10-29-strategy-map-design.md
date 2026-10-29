@@ -1,7 +1,7 @@
 # Strategy map — design
 
 Date: 2026-10-29
-Status: approved
+Status: approved; rules marked *tuned* were changed by the campaign balance pass in Task 5
 Builds on: `2026-10-28-act1-core-loop-design.md`, `2026-10-29-salvage-overhaul-challenge-design.md`
 
 ## 1. Purpose
@@ -17,8 +17,8 @@ ground, and a swarm spreads between loops toward your home station.
   "choice within a run" idea.
 - Pressure keeps building: the swarm spreads every loop, faster as time
   passes, and ignored ground becomes hives.
-- One star system of 14 locations in three rings; campaigns of roughly 15 to
-  25 loops.
+- One star system of 14 locations in three rings; campaigns of roughly 7 to
+  12 loops (tuned in Task 5; the first draft aimed for 15 to 25).
 - Win by killing the Warden at the core. Lose if the swarm takes home: the
   map resets but echoes, records and story flags stay.
 
@@ -75,8 +75,8 @@ neutral.
    - the first is adjacent to home or to a location you hold;
    - each next one is adjacent to the previous;
    - none is home, none is already yours, and none repeats;
-   - SHELF GATE is locked until you hold at least 4 of the 5 middle-ring
-     locations, and WARDEN CORE is reachable only from the gate.
+   - SHELF GATE is locked until you hold all 5 middle-ring locations
+     (*tuned*, was 4), and WARDEN CORE is reachable only from the gate.
 2. **Fly.** The run is the route's encounters back to back, with drifts
    between them. Each location plays as its base encounter with twists:
    - +25% enemy hull if the swarm holds it;
@@ -90,10 +90,17 @@ neutral.
 
 ## 4. The swarm
 
-- **Spread count per turn:** 1 + turn ÷ 4 (rounded down), capped at 3, plus
-  1 for every two hives.
+- **Spread count per turn:** 1 + turn ÷ 6 (rounded down, *tuned*, was ÷ 4),
+  capped at 3, plus 1 for every two hives.
 - **Targets:** non-swarm locations adjacent to swarm ground. The swarm picks
   the one closest to home by lane distance; ties break with the seeded RNG.
+  - *Tuned:* it takes neutral ground first and turns on yours only when no
+    neutral target is left.
+  - *Tuned:* home is the last stand. It is attacked only when it is the
+    swarm's only target.
+  - Why: under the first draft the swarm reached home in three turns
+    (o6, o4, o2, home) whatever the player did, and it retook the ground
+    next to home every turn, so claims never stuck.
 - **Fortified targets:** taking a fortified location removes the
   fortification instead and still uses up that spread.
 - **Your ground:** if the swarm takes a location you hold, it is lost.

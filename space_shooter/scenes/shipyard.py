@@ -49,7 +49,7 @@ class ShipyardScene(Scene):
         self.menu.update(dt)
 
     def draw(self, surface: pygame.Surface) -> None:
-        dim_overlay(surface, 215)
+        dim_overlay(surface, 240)
         state = self.game.campaign()
         cx = WIDTH // 2
         draw_text(surface, "SHIPYARD", 48, (cx, 70), BONE)
