@@ -210,3 +210,47 @@ def test_loop_end_plays_due_log(game):
     top = game.scenes.top
     assert isinstance(top, LogPanel) and top.entry.id == "m_first_claim"
     assert isinstance(game.scenes.stack[0], HangarScene)
+
+
+def test_ambush_reaches_nowhere(game):
+    from space_shooter.encounters import AMBUSH
+
+    run = start(game)
+    scene = GameplayScene(game, seed=1, run=run, node_id=None, encounter=AMBUSH)
+    game.scenes.push(scene)
+    clear_current(game, scene)
+    assert run.reached == -1 and run.state.owner == new_campaign(game.system).owner
+
+
+def test_loop_without_fights_leaves_no_echo(game):
+    from tests.test_gameplay import seeded_trace
+
+    game.save.echoes = [seeded_trace(n).to_data() for n in range(1, 13)]
+    run = start(game)
+    run.time = 40.0
+    run.finish(died=False)
+    assert sorted(e.loop for e in game.save.echoes) == list(range(1, 13))
+
+
+def test_window_close_mid_fight_keeps_fight_salvage(game):
+    run = start(game)
+    scene = fight(game, run, "o1")
+    run_frames(game, 120)
+    scene.score = 500
+    game.close_open_loop()
+    assert run.result.salvage == 500 and game.campaign().salvage == 250
+
+
+def test_echo_loadout_follows_its_own_segment():
+    from space_shooter.echoes import EchoPlayback, EchoTrace
+
+    trace = EchoTrace(
+        1,
+        0,
+        30.0,
+        [(6, 0.0, 1.0, 1.0, False), (6, 2.0, 1.0, 1.0, False), (0, 0.0, 1.0, 1.0, False), (0, 9.0, 1.0, 1.0, False)],
+        [(6, 0.0, {}), (0, 0.0, {}), (0, 5.0, {"nose": "turret"})],
+    )
+    playback = EchoPlayback(trace)
+    assert playback.advance(6, 1.0).loadout == {}
+    assert playback.advance(0, 6.0).loadout == {"nose": "turret"}
