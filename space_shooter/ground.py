@@ -338,3 +338,495 @@ class Arsenal:
 
 
 MISSIONS = {"m1": "nests", "m3": "hold", "m5": "carry"}
+
+
+# -- the swarm, the squad and the missions -----------------------------------------
+CRAWLER_HP, CRAWLER_SPEED, CRAWLER_RADIUS, CRAWLER_SCORE = 6, 150.0, 11, 10
+CRAWLER_DAMAGE, CRAWLER_COOLDOWN = 8, 0.6
+SPITTER_HP, SPITTER_SPEED, SPITTER_RADIUS, SPITTER_SCORE = 8, 70.0, 12, 20
+SPIT_RANGE, SPIT_PERIOD, SPIT_DAMAGE, SPIT_SPEED = 260.0, 1.6, 6, 320.0
+NEST_HP, NEST_RADIUS, NEST_SCORE = 40, 22, 60
+NEST_PERIOD, NEST_CAP, NEST_WAKE = 5.0, 6, 700.0
+CHASE_DIRECT = 200.0  # within this, with a clear line, the swarm runs straight at its prey
+FLOW_PERIOD = 0.5
+SURVIVOR_HP, SURVIVOR_RADIUS, SURVIVOR_SPEED = 60, 12, 190.0
+JOIN_RANGE, FOLLOW_NEAR, FOLLOW_FAR = 80.0, 70.0, 140.0
+SURVIVOR_RANGE, SURVIVOR_DAMAGE, SURVIVOR_PERIOD, SURVIVOR_SPREAD = 380.0, 2, 0.45, 0.05
+SURVIVOR_DROP = 30
+SQUAD_BONUS = 100
+PICKUP_RADIUS = 30.0
+BEACON_RADIUS, HOLD_TIME, WAVE_PERIOD = 120.0, 90.0, 12.0
+WAVE = (("crawler", 3), ("spitter", 1))
+WAVE_CLEARANCE = 600.0
+CORE_PICKUP, CARRY_SLOW, PAD_RADIUS = 40.0, 0.8, 60.0
+KINDS = {
+    "crawler": (CRAWLER_HP, CRAWLER_SPEED, CRAWLER_RADIUS, CRAWLER_SCORE),
+    "spitter": (SPITTER_HP, SPITTER_SPEED, SPITTER_RADIUS, SPITTER_SCORE),
+}
+OBJECTIVES = {"nests": "DESTROY THE BROOD NESTS", "hold": "HOLD THE BEACON", "carry": "RECOVER THE CORE"}
+
+
+class Enemy:
+    def __init__(self, kind: str, x: float, y: float, hp_mult: float = 1.0, nest: Nest | None = None) -> None:
+        hp, self.speed, radius, self.score = KINDS[kind]
+        self.kind = kind
+        self.body = Body(x, y, radius, hp * hp_mult, hp * hp_mult)
+        self.cooldown = 0.0
+        self.nest = nest
+        self.frozen = False  # held still (tests and set pieces)
+
+    @property
+    def pos(self) -> Point:
+        return self.body.pos
+
+
+@dataclass
+class Nest:
+    body: Body
+    period: float
+    timer: float = 0.0
+    children: int = 0
+
+    @property
+    def alive(self) -> bool:
+        return self.body.hp > 0
+
+
+class Survivor:
+    def __init__(self, x: float, y: float, state: str = "waiting") -> None:
+        self.body = Body(x, y, SURVIVOR_RADIUS, SURVIVOR_HP, SURVIVOR_HP)
+        self.state = state  # waiting | follow | hold | move
+        self.goal: Point | None = None
+        self.goal_field: dict[tuple[int, int], int] | None = None
+        self.cooldown = 0.0
+
+    @property
+    def x(self) -> float:
+        return self.body.x
+
+    @property
+    def y(self) -> float:
+        return self.body.y
+
+    @property
+    def pos(self) -> Point:
+        return self.body.pos
+
+    @property
+    def alive(self) -> bool:
+        return self.body.hp > 0
+
+    @property
+    def active(self) -> bool:
+        return self.alive and self.state != "waiting"
+
+
+@dataclass
+class GroundInputs:
+    move: Point = (0.0, 0.0)
+    aim: Point = (0.0, 0.0)
+    fire: bool = False
+    roll: bool = False
+    reload: bool = False
+    slot: int | None = None
+    grenade: bool = False
+    order: object = None  # "follow" | "hold" | ("move", x, y)
+
+
+def _norm(dx: float, dy: float) -> Point:
+    d = math.hypot(dx, dy)
+    return (dx / d, dy / d) if d > 1e-9 else (0.0, 0.0)
+
+
+class GroundWorld:
+    """One ground fight, advanced by ``step``; everything the scene draws lives here."""
+
+    def __init__(
+        self,
+        node_id: str,
+        mission: str | None = None,
+        hull: float = 1.0,
+        pace: float = 1.0,
+        seed: int = 0,
+        gmap: GroundMap | None = None,
+    ) -> None:
+        self.mission = mission or MISSIONS.get(node_id, "nests")
+        self.map = gmap or generate_map(node_id, self.mission)
+        self.hull, self.pace = hull, pace
+        self.rng = random.Random(seed)
+        self.pilot = Body(*self.map.pad, PILOT_RADIUS, PILOT_HEALTH, PILOT_HEALTH)
+        self.arsenal = Arsenal()
+        self.aim: Point = (self.pilot.x, self.pilot.y - 100)
+        self.enemies: list[Enemy] = []
+        self.nests = [
+            Nest(Body(x, y, NEST_RADIUS, NEST_HP * hull, NEST_HP * hull), NEST_PERIOD * pace) for x, y in self.map.nests
+        ]
+        self.survivors = [Survivor(x, y) for x, y in self.map.survivors]
+        self.pickups: list[list] = [["crate", x, y] for x, y in self.map.crates]
+        self.shots: list[Shot] = []
+        self.grenades: list[Grenade] = []
+        self.core: Point | None = self.map.core
+        self.carrying = False
+        self.hold_time = 0.0
+        self.wave_timer = WAVE_PERIOD * pace
+        self.score = 0
+        self.complete = False
+        self.dead = False
+        self.time = 0.0
+        self.roll_timer = 0.0
+        self.roll_cooldown = 0.0
+        self.roll_dir: Point = (0.0, -1.0)
+        self.invulnerable_for_tests = False
+        self.flow: dict[tuple[int, int], int] = {}
+        self.flow_timer = 0.0
+        self._events: list[tuple[str, object]] = []
+
+    # -- state ---------------------------------------------------------------
+    @property
+    def rolling(self) -> bool:
+        return self.roll_timer > 0
+
+    @property
+    def invulnerable(self) -> bool:
+        return self.rolling or self.invulnerable_for_tests
+
+    def at_pad(self) -> bool:
+        return math.dist(self.pilot.pos, self.map.pad) <= PAD_RADIUS
+
+    def squad_bonus(self) -> int:
+        return SQUAD_BONUS * sum(1 for s in self.survivors if s.active)
+
+    def objective_text(self) -> str:
+        if self.complete:
+            return "RETURN TO THE TUG"
+        title = OBJECTIVES[self.mission]
+        if self.mission == "nests":
+            dead = sum(1 for n in self.nests if not n.alive)
+            return f"{title}  {dead}/{len(self.nests)}"
+        if self.mission == "hold":
+            return f"{title}  {int(self.hold_time)}/{int(HOLD_TIME)} s"
+        return "CARRY THE CORE TO THE TUG" if self.carrying else title
+
+    # -- changes -------------------------------------------------------------
+    def spawn(self, kind: str, x: float, y: float, nest: Nest | None = None) -> Enemy:
+        enemy = Enemy(kind, x, y, self.hull, nest)
+        self.enemies.append(enemy)
+        if nest is not None:
+            nest.children += 1
+        return enemy
+
+    def give_weapon(self, kind: str) -> str:
+        return self.arsenal.give(kind)
+
+    def damage_pilot(self, amount: float) -> None:
+        if self.invulnerable or self.dead:
+            return
+        self.pilot.hp -= amount
+        self._events.append(("pilot_hit", amount))
+
+    def damage_survivor(self, s: Survivor, amount: float) -> None:
+        if not s.alive:
+            return
+        s.body.hp -= amount
+        if not s.alive:
+            self.pickups.append(["ammo", s.x, s.y])
+            self._events.append(("survivor_down", self.survivors.index(s)))
+
+    def damage_enemy(self, e: Enemy, amount: float) -> None:
+        if e not in self.enemies:
+            return
+        e.body.hp -= amount
+        self._events.append(("hit", e.kind))
+        if e.body.hp <= 0:
+            self.enemies.remove(e)
+            if e.nest is not None:
+                e.nest.children -= 1
+            self.score += e.score
+            self._events.append(("kill", e.kind))
+
+    def damage_nest(self, n: Nest, amount: float) -> None:
+        if not n.alive:
+            return
+        n.body.hp -= amount
+        self._events.append(("hit", "nest"))
+        if not n.alive:
+            self.score += NEST_SCORE
+            self._events.append(("kill", "nest"))
+
+    # -- the step ------------------------------------------------------------
+    def step(self, dt: float, inputs: GroundInputs) -> list[tuple[str, object]]:
+        if self.dead:
+            return []
+        self._events = []
+        self.time += dt
+        self._pilot(dt, inputs)
+        self._orders(inputs.order)
+        self.flow_timer -= dt
+        if self.flow_timer <= 0:
+            self.flow = self.map.distances_from(self.pilot.pos)
+            self.flow_timer = FLOW_PERIOD
+        self._survivors(dt)
+        self._nests(dt)
+        self._enemies(dt)
+        self._shots(dt)
+        self._grenades(dt)
+        self._pickups()
+        self._mission(dt)
+        if self.pilot.hp <= 0:
+            self.dead = True
+            self._events.append(("pilot_dead", None))
+        return self._events
+
+    def _pilot(self, dt: float, inputs: GroundInputs) -> None:
+        self.aim = inputs.aim
+        self.roll_timer = max(0.0, self.roll_timer - dt)
+        self.roll_cooldown = max(0.0, self.roll_cooldown - dt)
+        move = _norm(*inputs.move)
+        if inputs.roll and self.roll_cooldown <= 0:
+            self.roll_dir = (
+                move if move != (0.0, 0.0) else _norm(inputs.aim[0] - self.pilot.x, inputs.aim[1] - self.pilot.y)
+            )
+            self.roll_timer, self.roll_cooldown = ROLL_TIME, ROLL_COOLDOWN
+        if self.rolling:
+            dx, dy = self.roll_dir[0] * ROLL_SPEED * dt, self.roll_dir[1] * ROLL_SPEED * dt
+        else:
+            speed = PILOT_SPEED * (CARRY_SLOW if self.carrying else 1.0)
+            dx, dy = move[0] * speed * dt, move[1] * speed * dt
+        move_body(self.map, self.pilot, dx, dy)
+        a = self.arsenal
+        a.update(dt)
+        if inputs.slot is not None:
+            a.select(inputs.slot)
+        if inputs.reload:
+            a.reload()
+        if inputs.fire and not self.rolling:
+            shots = a.trigger(self.pilot.pos, inputs.aim, self.rng)
+            if shots:
+                self.shots += shots
+                self._events.append(("shot", a.current))
+        if inputs.grenade:
+            g = a.throw(self.map, self.pilot.pos, inputs.aim)
+            if g is not None:
+                self.grenades.append(g)
+
+    def _orders(self, order) -> None:
+        if order is None:
+            return
+        squad = [s for s in self.survivors if s.active]
+        if order in ("follow", "hold"):
+            for s in squad:
+                s.state, s.goal, s.goal_field = order, None, None
+        elif isinstance(order, tuple) and order[0] == "move":
+            goal = (float(order[1]), float(order[2]))
+            for i, s in enumerate(squad):
+                offset = (i - (len(squad) - 1) / 2) * 30
+                spot = self.map.cast(goal, (goal[0] + offset, goal[1]))
+                s.state, s.goal = "move", spot
+                s.goal_field = self.map.distances_from(spot)
+
+    def _step_toward(self, body: Body, target: Point, field: dict, speed: float, dt: float) -> None:
+        """Run straight at a close, visible target; otherwise follow the flow field downhill."""
+        if math.dist(body.pos, target) <= CHASE_DIRECT and self.map.line_of_sight(body.pos, target):
+            aim = target
+        else:
+            tx, ty = _tile_of(body.pos)
+            here = field.get((tx, ty))
+            best = None
+            for nxt in ((tx + 1, ty), (tx - 1, ty), (tx, ty + 1), (tx, ty - 1)):
+                d = field.get(nxt)
+                if d is not None and (best is None or d < best[0]):
+                    best = (d, nxt)
+            downhill = best is not None and (here is None or best[0] < here)
+            aim = _centre(best[1]) if downhill else target
+        ux, uy = _norm(aim[0] - body.x, aim[1] - body.y)
+        step = min(speed * dt, math.dist(body.pos, aim))
+        move_body(self.map, body, ux * step, uy * step)
+
+    def _survivors(self, dt: float) -> None:
+        for i, s in enumerate(self.survivors):
+            if not s.alive:
+                continue
+            if s.state == "waiting":
+                if math.dist(s.pos, self.pilot.pos) <= JOIN_RANGE:
+                    s.state = "follow"
+                    self._events.append(("joined", i))
+                continue
+            if s.state == "follow" and math.dist(s.pos, self.pilot.pos) > FOLLOW_NEAR:
+                if math.dist(s.pos, self.pilot.pos) > FOLLOW_FAR or s.goal is not None:
+                    s.goal = self.pilot.pos  # walk in until comfortably close
+                    self._step_toward(s.body, self.pilot.pos, self.flow, SURVIVOR_SPEED, dt)
+            elif s.state == "follow":
+                s.goal = None
+            elif s.state == "move" and s.goal is not None:
+                self._step_toward(s.body, s.goal, s.goal_field or {}, SURVIVOR_SPEED, dt)
+                if math.dist(s.pos, s.goal) < 8:
+                    s.state, s.goal, s.goal_field = "hold", None, None
+            s.cooldown = max(0.0, s.cooldown - dt)
+            if s.cooldown <= 0:
+                target = self._nearest_foe(s.pos, SURVIVOR_RANGE)
+                if target is not None:
+                    a = math.atan2(target[1] - s.y, target[0] - s.x) + self.rng.uniform(
+                        -SURVIVOR_SPREAD, SURVIVOR_SPREAD
+                    )
+                    self.shots.append(
+                        Shot(s.x, s.y, math.cos(a) * SHOT_SPEED, math.sin(a) * SHOT_SPEED, SURVIVOR_DAMAGE, True)
+                    )
+                    s.cooldown = SURVIVOR_PERIOD
+
+    def _nearest_foe(self, origin: Point, reach: float) -> Point | None:
+        targets = [e.pos for e in self.enemies] + [n.body.pos for n in self.nests if n.alive]
+        seen = [p for p in targets if math.dist(origin, p) <= reach and self.map.line_of_sight(origin, p)]
+        return min(seen, key=lambda p: math.dist(origin, p)) if seen else None
+
+    def _prey(self, origin: Point) -> tuple[Point, object]:
+        """The nearest of the pilot and the active survivors."""
+        best: tuple[Point, object] = (self.pilot.pos, None)
+        for s in self.survivors:
+            if s.active and math.dist(origin, s.pos) < math.dist(origin, best[0]):
+                best = (s.pos, s)
+        return best
+
+    def _hurt(self, victim, amount: float) -> None:
+        if victim is None:
+            self.damage_pilot(amount)
+        else:
+            self.damage_survivor(victim, amount)
+
+    def _nests(self, dt: float) -> None:
+        for n in self.nests:
+            if not n.alive or math.dist(n.body.pos, self.pilot.pos) > NEST_WAKE:
+                continue
+            n.timer += dt
+            if n.timer >= n.period:
+                n.timer -= n.period
+                if n.children < NEST_CAP:
+                    self.spawn("crawler", n.body.x, n.body.y, nest=n)
+
+    def _enemies(self, dt: float) -> None:
+        for e in list(self.enemies):
+            e.cooldown = max(0.0, e.cooldown - dt)
+            if e.frozen:
+                continue
+            prey, victim = self._prey(e.pos)
+            dist = math.dist(e.pos, prey)
+            if e.kind == "crawler":
+                if dist > e.body.radius + PILOT_RADIUS:
+                    self._step_toward(e.body, prey, self.flow, e.speed, dt)
+                elif e.cooldown <= 0:
+                    self._hurt(victim, CRAWLER_DAMAGE)
+                    e.cooldown = CRAWLER_COOLDOWN
+                continue
+            sight = self.map.line_of_sight(e.pos, prey)
+            if sight and dist < SPIT_RANGE - 30:
+                ux, uy = _norm(e.body.x - prey[0], e.body.y - prey[1])
+                move_body(self.map, e.body, ux * e.speed * dt, uy * e.speed * dt)
+            elif not sight or dist > SPIT_RANGE:
+                self._step_toward(e.body, prey, self.flow, e.speed, dt)
+            if sight and dist <= SPIT_RANGE + 40 and e.cooldown <= 0:
+                ux, uy = _norm(prey[0] - e.body.x, prey[1] - e.body.y)
+                self.shots.append(Shot(e.body.x, e.body.y, ux * SPIT_SPEED, uy * SPIT_SPEED, SPIT_DAMAGE, False, 2.0))
+                e.cooldown = SPIT_PERIOD
+
+    def _shots(self, dt: float) -> None:
+        for shot in list(self.shots):
+            shot.x += shot.vx * dt
+            shot.y += shot.vy * dt
+            shot.life -= dt
+            if shot.life <= 0 or self.map.blocked(shot.x, shot.y):
+                self.shots.remove(shot)
+                continue
+            hit = False
+            if shot.friendly:
+                for e in self.enemies:
+                    if math.dist((shot.x, shot.y), e.pos) <= e.body.radius:
+                        self.damage_enemy(e, shot.damage)
+                        hit = True
+                        break
+                if not hit:
+                    for n in self.nests:
+                        if n.alive and math.dist((shot.x, shot.y), n.body.pos) <= n.body.radius:
+                            self.damage_nest(n, shot.damage)
+                            hit = True
+                            break
+            else:
+                if math.dist((shot.x, shot.y), self.pilot.pos) <= self.pilot.radius:
+                    self.damage_pilot(shot.damage)
+                    hit = not self.invulnerable  # a rolling pilot lets the spit pass
+                else:
+                    for s in self.survivors:
+                        if s.active and math.dist((shot.x, shot.y), s.pos) <= s.body.radius:
+                            self.damage_survivor(s, shot.damage)
+                            hit = True
+                            break
+            if hit:
+                self.shots.remove(shot)
+
+    def _grenades(self, dt: float) -> None:
+        for g in list(self.grenades):
+            ux, uy = _norm(g.tx - g.x, g.ty - g.y)
+            step = min(GRENADE_SPEED * dt, math.dist((g.x, g.y), (g.tx, g.ty)))
+            g.x, g.y = g.x + ux * step, g.y + uy * step
+            g.fuse -= dt
+            if g.fuse > 0:
+                continue
+            self.grenades.remove(g)
+            centre = (g.x, g.y)
+            self._events.append(("explosion", centre))
+            for e in list(self.enemies):
+                if math.dist(centre, e.pos) <= GRENADE_RADIUS:
+                    self.damage_enemy(e, GRENADE_DAMAGE)
+            for n in self.nests:
+                if math.dist(centre, n.body.pos) <= GRENADE_RADIUS + n.body.radius:
+                    self.damage_nest(n, GRENADE_DAMAGE)
+
+    def _pickups(self) -> None:
+        for item in list(self.pickups):
+            kind, x, y = item
+            if math.dist((x, y), self.pilot.pos) > PICKUP_RADIUS + self.pilot.radius:
+                continue
+            self.pickups.remove(item)
+            if kind == "crate":
+                text = self.arsenal.open_crate(self.rng)
+            else:
+                self.arsenal.add_ammo("rifle", SURVIVOR_DROP)
+                text = f"+{SURVIVOR_DROP} RIFLE AMMO"
+            self._events.append(("pickup", text))
+        if self.core is not None and not self.carrying and math.dist(self.core, self.pilot.pos) <= CORE_PICKUP:
+            self.carrying = True
+            self._events.append(("pickup", "CORE"))
+
+    def _spawn_wave(self) -> None:
+        w, h = self.map.size
+        for kind, count in WAVE:
+            for _ in range(count):
+                for _ in range(200):
+                    tx = self.rng.choice(
+                        (self.rng.randrange(1, 4), self.rng.randrange(int(w // TILE) - 4, int(w // TILE) - 1))
+                    )
+                    ty = self.rng.randrange(1, int(h // TILE) - 1)
+                    p = _centre((tx, ty))
+                    if not self.map.blocked(*p) and math.dist(p, self.pilot.pos) >= WAVE_CLEARANCE:
+                        self.spawn(kind, *p)
+                        break
+
+    def _mission(self, dt: float) -> None:
+        if self.complete:
+            return
+        if self.mission == "nests":
+            done = all(not n.alive for n in self.nests)
+        elif self.mission == "hold":
+            if self.map.beacon is not None and math.dist(self.pilot.pos, self.map.beacon) <= BEACON_RADIUS:
+                self.hold_time += dt
+            if self.hold_time > 0:
+                self.wave_timer -= dt
+                if self.wave_timer <= 0:
+                    self.wave_timer += WAVE_PERIOD * self.pace
+                    self._spawn_wave()
+            done = self.hold_time >= HOLD_TIME
+        else:
+            if self.carrying:
+                self.core = self.pilot.pos
+            done = self.carrying and self.at_pad()
+        if done:
+            self.complete = True
+            self._events.append(("complete", self.mission))
