@@ -43,7 +43,7 @@ class PauseScene(Scene):
 
         self.game.scenes.pop()
         below = self.game.scenes.top
-        if isinstance(below, GameplayScene):
+        if isinstance(below, GameplayScene) or hasattr(below, "end_loop"):  # a fight, in space or on foot
             self.game.scenes.push(LoopEndScene(self.game, below.end_loop(victory=False)))
         elif getattr(below, "run", None) is not None:  # abandoning in flight: the tug is lost
             self.game.audio.stop_all_loops()

@@ -40,8 +40,8 @@ class CampaignRun:
 
     def win_fight(self, node_id: str | None, encounter_index: int, salvage: int) -> None:
         self.carried += salvage
-        self.reached = max(self.reached, encounter_index)
-        if node_id is not None:
+        if node_id is not None:  # an ambush claims nothing and reaches nowhere
+            self.reached = max(self.reached, encounter_index)
             campaign.claim(self.state, node_id)
             self.game.store_campaign(self.state)
 
@@ -52,8 +52,9 @@ class CampaignRun:
         game, save, system, state = self.game, self.game.save, self.game.system, self.state
         reached = max(0, self.reached)
         trace = self.recorder.finish(reached=reached, duration=self.time)
-        traces = store_trace([EchoTrace.from_data(d) for d in save.echoes], trace)
-        save.echoes = [t.to_data() for t in traces]
+        if trace.samples:  # a loop that never fought leaves no echo
+            traces = store_trace([EchoTrace.from_data(d) for d in save.echoes], trace)
+            save.echoes = [t.to_data() for t in traces]
         add_record(save, Record(self.loop, reached, self.carried, round(self.time, 1), game.settings.difficulty))
         save.loop += 1
         report = campaign.end_turn(system, state, self.carried, died, warden_killed, self.rng)

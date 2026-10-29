@@ -122,7 +122,8 @@ class GameplayScene(Scene):
         else:
             self.recorder = run.recorder
             roster = run.roster()
-        self.recording = True  # a fight of a type this loop already recorded is not recorded again
+        # a fight of a type this loop already recorded is not recorded again; a flown fight decides at its start
+        self.recording = run is None
         self.fight_over = False
         self.roster = [t.loop for t in roster]
         self.echoes: pygame.sprite.Group = pygame.sprite.Group(Echo(t) for t in roster)
@@ -378,7 +379,9 @@ class GameplayScene(Scene):
     def _on_director_event(self, event: str, value) -> None:
         if event == "drift_start":
             self.game.audio.set_bed_level(0.12)
-            self._play_due_log(self.director.encounters[value].index)
+            index = self.director.encounters[value].index
+            if index <= WARDEN_INDEX:  # an ambush is no step along the story
+                self._play_due_log(index)
         elif event == "encounter_start":
             self.game.audio.set_bed_level(0.25)
             key = self.echo_key

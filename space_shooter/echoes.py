@@ -110,8 +110,11 @@ class EchoPlayback:
 
     def _loadout_at(self, index: int, t_rel: float) -> dict[str, str]:
         current: dict[str, str] = {}
+        own = any(e == index for e, _, _ in self.trace.loadouts)
         for e, t, parts in self.trace.loadouts:
-            if e < index or (e == index and t <= t_rel):
+            # a segment that logged its own loadout (every flown fight does) wears only that, since flown
+            # fights are keyed by type, not in order; older traces carry the last loadout forward
+            if (e == index and t <= t_rel) or (not own and e < index):
                 current = parts
         return dict(current)
 
