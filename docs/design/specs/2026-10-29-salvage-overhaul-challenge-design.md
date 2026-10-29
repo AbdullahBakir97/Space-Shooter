@@ -1,7 +1,7 @@
 # Salvage overhaul and challenge pass — design
 
 Date: 2026-10-29
-Status: approved
+Status: approved; numbers below marked *tuned* were changed by the balance pass in Task 6
 Builds on: `2026-10-28-act1-core-loop-design.md`
 
 ## 1. Why
@@ -35,7 +35,7 @@ fell in 18 to 33 seconds.
 | Part | Signature move | Numbers |
 | --- | --- | --- |
 | Auto-turret | Screen-wide range; targets the enemy nearest the ship; drawn barrel swivels toward its target. Scarred: two-round burst. | range 900 px, period 0.5 s, burst gap 0.08 s |
-| Slug cannon | Every 4th trigger pull fires a heavy round that pierces every enemy in its path and shoves each hit enemy back. | heavy damage 4, pierce unlimited, shove 28 px up |
+| Slug cannon | Every 4th trigger pull fires a heavy round that pierces every enemy in its path and shoves each hit enemy back. | normal round 2 *tuned* (was 3), heavy damage 4, pierce unlimited, shove 28 px up |
 | Tractor | Visible beam to the drop it is pulling; range doubled. Drag field slows enemy bullets near the ship. | pull range 360 px, drag radius 150 px, drag 40% slower |
 | Armour plate | Drawn cracks as it loses hits. When it breaks it bursts into shrapnel. | 10 shrapnel rounds, 1 damage each, 520 px/s |
 | Thruster | Dash on X / Shift / gamepad X: a short invulnerable burst with afterimages. Passive speed bonus stays. | dash 0.18 s at 1100 px/s, recharge 2.5 s per charge, scarred thruster −0.5 s |
@@ -72,14 +72,14 @@ A kind is "paired" when two or more of it are bolted on (scarred counts).
   | Preset | Speed | Hull | Fire | Salvage |
   | --- | --- | --- | --- | --- |
   | Easy | 1.0 | 1.0 | 1.0 | 0.8 |
-  | Normal | 1.25 | 1.4 | 1.5 | 1.0 |
-  | Hard | 1.4 | 1.8 | 2.0 | 1.5 |
+  | Normal | 1.25 | 1.4 | 1.8 *tuned* | 1.0 |
+  | Hard | 1.4 | 1.8 | 2.4 *tuned* | 1.5 |
 
 - **Echo pressure.** Each live echo at the moment an enemy spawns adds 8% to
   its hull and 10% to its fire rate.
 - **Loop scaling.** Enemy hull grows 4% per loop, capped at +60%.
 - **The Warden.**
-  - Base hull 260 (was 160).
+  - Base hull 600 *tuned* (was 160; 260 in the first draft).
   - Sweep every 0.75 s, Hunt every 0.95 s, rings every 2.6 s, Collapse single
     shots every 1.1 s.
   - Entering phase 2 and phase 3 each drops one scarred part.

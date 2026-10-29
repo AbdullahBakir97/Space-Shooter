@@ -27,12 +27,23 @@ loops. Every loop is a fresh build.
 
 | Part | Slots | What it does |
 | --- | --- | --- |
-| Auto-turret | wing, aft | Fires at the nearest enemy in range on its own. |
-| Slug cannon | fore | Fires with your gun: a slow heavy round that hits for 3 and pierces one enemy. |
-| Tractor | aft | Pulls drops toward you and recovers knocked-off parts. |
-| Armour plate | any | Absorbs the next two hits. Enemies aim at it. |
-| Thruster | aft | +15% speed, stacks twice. |
-| Salvage claw | fore | +50% drop chance and more hull patches. |
+| Auto-turret | wing, aft | Swivels and fires on its own at the enemy nearest you, anywhere on screen. Scarred turrets fire two-round bursts. |
+| Slug cannon | fore | Fires with your gun. Every fourth shot is a heavy round that tears through its whole line and shoves enemies back. |
+| Tractor | aft | A visible beam reels in drops up to 360 px away and recovers knocked-off parts. Its drag field slows enemy bullets near you by 40%. |
+| Armour plate | any | Absorbs two hits and draws enemy aim. It cracks as it wears, then bursts into shrapnel that shreds nearby enemies. |
+| Thruster | aft | +15% speed, and a dash on X or Shift: a short burst you can't be hit during. One charge, recharging in 2.5 s. |
+| Salvage claw | fore | Tears enemies that touch it, and anything it kills always drops salvage. +50% drop chance. |
+
+**Pair bonuses.** Two of the same part unlock a named bonus, shown in the cockpit panel:
+
+| Pair | Bonus |
+| --- | --- |
+| TWIN TURRETS | Turrets fire together, faster. |
+| BROADSIDE | Heavy slug every third shot. |
+| GRAVITY WELL | The tractor pulls from anywhere on screen. |
+| BULKHEAD | Each plate takes three hits. |
+| AFTERBURNER | Two dash charges, recharging faster. |
+| SCRAPPER | Every part dropped by a kill is scarred. |
 
 When the hull takes a hit, there is a 35% chance a part is knocked off
 instead. It drifts away for six seconds and you can fly back for it.
@@ -52,7 +63,13 @@ each one where the radio sometimes speaks.
 
 The Warden has three phases. It sweeps rotating fans of fire, then hunts the
 densest cluster of your echoes, then collapses into debris rings that expose
-its eye for double damage. Enemy hulls grow 3% each loop, up to 45%.
+its eye for double damage, and it sheds a scarred part each time it breaks into
+a new phase.
+
+**Every enemy shoots.** Drones fire aimed shots from Ash Shelf on, zigzaggers
+fire spreads, divers fire a burst as they dive, and gunners hold a firing line.
+Each echo flying with you makes new enemies 8% tougher and 10% quicker to
+fire, and enemy hulls grow 4% each loop, up to 60%.
 
 **The story** is told through twenty short radio logs that unlock as you loop,
 lose echoes and reach new encounters. The hangar keeps an archive of every log
@@ -78,6 +95,7 @@ Requires Python 3.11 or newer. `pip install -e .` also installs a
 | --- | --- | --- |
 | Move | Arrow keys / WASD | Left stick / D-pad |
 | Fire (hold) | Space / Z | A / Y / RB |
+| Dash (needs a thruster) | X / Shift | X |
 | Pause | Esc / P | Start |
 | Menu confirm / back | Enter / Esc | A / Back |
 | Fullscreen | F11 | |
@@ -94,7 +112,13 @@ screen shake, and turns the star flare and the ash blackout into warnings
 only.
 
 Difficulty scales enemy speed, hull and fire rate, and multiplies salvage
-value: Easy x0.8, Normal x1.0, Hard x1.5.
+value:
+
+| Preset | Speed | Hull | Fire rate | Salvage |
+| --- | --- | --- | --- | --- |
+| Easy | 1.0 | 1.0 | 1.0 | x0.8 |
+| Normal | 1.25 | 1.4 | 1.8 | x1.0 |
+| Hard | 1.4 | 1.8 | 2.4 | x1.5 |
 
 Progress, echoes, story flags, records and settings are stored per user
 (`~/.local/share/space-shooter` on Linux,
@@ -111,7 +135,8 @@ space_shooter/
   game.py                    window, clock, input mapping, main loop
   config.py / palette.py     tuning constants and the colour palette
   save.py                    versioned save, echo packing, records, migration
-  salvage.py                 hardpoints, parts, knock-off and drop rules
+  salvage.py                 hardpoints, parts, pair bonuses, knock-off and drop rules
+  dash.py                    thruster dash charges and recharge
   encounters.py              Act 1 encounters as data and their director
   echoes.py                  recording, playback, roster rules, cluster targeting
   story.py                   radio-log conditions and selection
@@ -121,6 +146,7 @@ space_shooter/
   starfield.py / effects.py  dying star, ash, parallax, particles, shake, flashes
   hud.py / ui.py             cockpit readout and menu widgets
   entities/                  tug, bullets, parts and drops, enemies, the Warden, hazards, echoes
+  scenes/salvage_ops.py      claw, tractor, drag field and shrapnel behaviour
   scenes/                    hangar, gameplay, log panel, archive, records, settings, pause, loop-end card
 tests/                       headless pytest suite
 images/                      12x16 source sprites
@@ -139,7 +165,7 @@ ruff check . && ruff format --check .
 pytest
 ```
 
-The suite (193 tests) runs with SDL's dummy video and audio drivers, so it
+The suite (262 tests) runs with SDL's dummy video and audio drivers, so it
 passes on CI runners and headless machines. CI runs lint, format and tests on
 Python 3.11 to 3.13.
 

@@ -456,7 +456,7 @@ def test_difficulty_table():
     from space_shooter.config import DIFFICULTIES, ENEMY_BULLET_SPEED
 
     rows = {k: (d.enemy_speed, d.enemy_hp, d.enemy_fire_rate, d.score_mult) for k, d in DIFFICULTIES.items()}
-    assert rows == {"easy": (1.0, 1.0, 1.0, 0.8), "normal": (1.25, 1.4, 1.5, 1.0), "hard": (1.4, 1.8, 2.0, 1.5)}
+    assert rows == {"easy": (1.0, 1.0, 1.0, 0.8), "normal": (1.25, 1.4, 1.8, 1.0), "hard": (1.4, 1.8, 2.4, 1.5)}
     assert ENEMY_BULLET_SPEED == 290.0
 
 

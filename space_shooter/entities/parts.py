@@ -12,8 +12,8 @@ from space_shooter.entities.bullets import Bullet, HeavySlug, PlayerBullet, Slug
 from space_shooter.salvage import SLOT_OFFSETS, Loadout
 
 SLUG_SPEED = 520.0
-SLUG_DAMAGE = 3
-SLUG_DAMAGE_RARE = 5
+SLUG_DAMAGE = 2
+SLUG_DAMAGE_RARE = 3
 HEAVY_DAMAGE = 4
 HEAVY_DAMAGE_RARE = 6
 TURRET_RANGE = 900.0

@@ -25,7 +25,7 @@ ENEMY_BULLET_SPEED = 290.0
 ENEMY_BASE_SPEED = 120.0
 ENEMY_SCORE = {"drone": 100, "zigzag": 150, "diver": 200, "gunner": 300, "warden": 5000}  # salvage value
 ENEMY_HP = {"drone": 1, "zigzag": 2, "diver": 1, "gunner": 3}
-WARDEN_BASE_HP = 260  # hits, before difficulty
+WARDEN_BASE_HP = 600  # hits, before difficulty
 LOOP_HULL_STEP = 0.04  # enemy hull grows 4% per loop...
 LOOP_HULL_CAP = 0.60  # ...up to +60%
 ECHO_PRESSURE_HULL = 0.08  # per live echo when an enemy spawns
@@ -52,8 +52,8 @@ class Difficulty:
 
 DIFFICULTIES: dict[str, Difficulty] = {
     "easy": Difficulty("Easy", 1.0, 1.0, 1.0, 0.8),
-    "normal": Difficulty("Normal", 1.25, 1.4, 1.5, 1.0),
-    "hard": Difficulty("Hard", 1.4, 1.8, 2.0, 1.5),
+    "normal": Difficulty("Normal", 1.25, 1.4, 1.8, 1.0),
+    "hard": Difficulty("Hard", 1.4, 1.8, 2.4, 1.5),
 }
 DIFFICULTY_ORDER = ["easy", "normal", "hard"]
 

@@ -114,3 +114,33 @@ Target after Task 6: average hits at least 18, average Warden fight at least 52 
 - Balance probe re-run on seeds 1 to 3; numbers recorded in this plan's results section and the commit message. If the target is missed, tune `config.py` numbers only and re-run.
 
 **Tests:** `test_hud_draws_with_every_pair_active`, `test_hud_lists_pair_names`.
+
+## Results
+
+Balance probe after Task 6, Normal, same autopilot and seeds as the baseline:
+
+| Seed | Hits (before → after) | Warden fight (before → after) |
+| --- | --- | --- |
+| 1 | 4 → 21 | 10.7 s → 59.7 s |
+| 2 | 8 → 34 | 33.5 s → 99.1 s |
+| 3 | 6 → 21 | 33.6 s → 84.9 s |
+
+Average hits 6 → 25 (target 18) and average Warden fight 26 s → 81 s (target 52).
+
+Tuning needed to get there:
+- Warden base hull went 260 → 600.
+- Normal fire rate went 1.5 → 1.8, and Hard 2.0 → 2.4.
+- The slug cannon's normal round went 3 → 2 damage, scarred 5 → 3. It fired on every trigger pull and was half of all damage dealt to the Warden.
+
+The autopilot never dodges or dashes, so a real player will take fewer hits.
+
+## Decisions
+
+- **Warden hull tests moved earlier.** They were updated in Task 1, because the hull number lives in config and changed there.
+- **The death test now loops until the ship actually dies.** On the harder Normal, a warm-up ram plus the guaranteed first drop could absorb a single lethal hit.
+- **Turret range test replaced.** The old 260 px range test is now `test_turret_reaches_top_of_screen`.
+- **Values the spec left open.** Heavy slug 4 (scarred 6) and claw 2 (scarred 3) damage; claw reach is 20 px plus the enemy's collision radius.
+- **Armour.** The last absorbed hit now reports `armour_broken`.
+- **Drag field.** It is drawn as a faint ring whenever a tractor is fitted.
+- **Thrusters.** A newly fitted thruster arrives with its charge.
+- **Slug damage.** The slug's base damage was tuned in `entities/parts.py`, not `config.py`, because that is where the number lives.

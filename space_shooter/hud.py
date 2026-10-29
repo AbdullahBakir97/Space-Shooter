@@ -9,7 +9,7 @@ import pygame
 from space_shooter import assets, procgen
 from space_shooter.config import HEIGHT, LOW_HEALTH_THRESHOLD, PLAYER_MAX_HEALTH, WIDTH
 from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL, STEEL_DIM, VOID
-from space_shooter.salvage import SLOT_OFFSETS, SLOTS, Part
+from space_shooter.salvage import PAIR_NAMES, SLOT_OFFSETS, SLOTS, Part
 from space_shooter.ui import draw_bar, draw_text
 
 HULL_CELLS = 10
@@ -21,6 +21,20 @@ def slot_colour(part: Part | None) -> tuple[int, int, int]:
     if part is None:
         return STEEL_DIM
     return EMBER if part.rare else STEEL
+
+
+def pair_labels(scene) -> list[str]:
+    """Names of the pair bonuses the tug has active right now."""
+    return [PAIR_NAMES[kind] for kind in scene.player.loadout.pairs()]
+
+
+def dash_pips(player) -> list[float]:
+    """One value per dash charge: 1.0 ready, the refill fraction for the next one, 0.0 empty."""
+    dash = player.dash
+    pips = [1.0] * dash.charges
+    if dash.charges < dash.max_charges:
+        pips.append(dash.recharge_fraction)
+    return (pips + [0.0] * dash.max_charges)[: dash.max_charges]
 
 
 def _hull_colour(scene) -> tuple[int, int, int]:
@@ -49,9 +63,20 @@ def _draw_schematic(surface: pygame.Surface, scene) -> None:
     for i in range(HULL_CELLS):
         rect = (112 + i * 13, HEIGHT - 82, 10, 16)
         pygame.draw.rect(surface, colour if i < filled else STEEL_DIM, rect, 0 if i < filled else 1)
-    draw_text(
-        surface, f"{len(scene.player.loadout.parts())}/6 PARTS", 16, (112, HEIGHT - 56), ASH, "topleft", shadow=False
-    )
+    parts = f"{len(scene.player.loadout.parts())}/6 PARTS"
+    draw_text(surface, parts, 16, (112, HEIGHT - 56), ASH, "topleft", shadow=False)
+    pips = dash_pips(scene.player)
+    if pips:
+        draw_text(surface, "DASH", 16, (112, HEIGHT - 36), ASH, "topleft", shadow=False)
+        for i, fill in enumerate(pips):
+            rect = pygame.Rect(152 + i * 22, HEIGHT - 36, 18, 10)
+            pygame.draw.rect(surface, STEEL_DIM, rect, 1)
+            if fill > 0:
+                inner = rect.copy()
+                inner.width = max(2, int(rect.width * fill))
+                pygame.draw.rect(surface, STEEL if fill >= 1.0 else STEEL_DIM, inner)
+    for i, label in enumerate(pair_labels(scene)):
+        draw_text(surface, label, 16, (258, HEIGHT - 110 + i * 18), EMBER, "topleft", shadow=False)
 
 
 def roster_status(scene) -> list[tuple[int, bool]]:

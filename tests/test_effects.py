@@ -73,3 +73,46 @@ def test_hud_draws_with_full_loadout(game):
     scene.player.health = 20
     run_frames(game, 30)
     assert scene.roster == [5, 4, 3, 2, 1]  # roster order: most recent first among equals
+
+
+def test_hud_lists_pair_names(game):
+    from space_shooter.hud import pair_labels
+
+    scene = start_run(game, encounter=0)
+    lo = scene.player.loadout
+    lo.attach(Part("turret"), (-30, 2))
+    lo.attach(Part("turret"), (30, 2))
+    lo.attach(Part("thruster"), (-16, 30))
+    lo.attach(Part("thruster"), (16, 30))
+    assert pair_labels(scene) == ["TWIN TURRETS", "AFTERBURNER"]
+
+
+def test_dash_pips(game):
+    from space_shooter.hud import dash_pips
+
+    scene = start_run(game, encounter=0)
+    assert dash_pips(scene.player) == []
+    scene.player.loadout.attach(Part("thruster"), (-16, 30))
+    scene.player.loadout.attach(Part("thruster"), (16, 30))
+    run_frames(game, 1)
+    assert dash_pips(scene.player) == [1.0, 1.0]
+    scene.player.start_dash((1, 0))
+    run_frames(game, 60)
+    pips = dash_pips(scene.player)
+    assert pips[0] == 1.0 and 0.0 < pips[1] < 1.0
+
+
+def test_hud_draws_with_every_pair_active(game):
+    scene = start_run(game, encounter=0)
+    lo = scene.player.loadout
+    for kind, contact in [
+        ("slug", (-14, -30)),
+        ("slug", (14, -30)),
+        ("turret", (-30, 2)),
+        ("turret", (30, 2)),
+        ("thruster", (-16, 30)),
+        ("thruster", (16, 30)),
+    ]:
+        lo.attach(Part(kind), contact)
+    run_frames(game, 30)
+    assert len(lo.pairs()) == 3
