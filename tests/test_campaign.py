@@ -231,3 +231,100 @@ def test_state_round_trip(system):
     s.hive_age["o5"] = 2
     back = CampaignState.from_dict(json.loads(json.dumps(s.to_dict())))
     assert back == s
+
+
+# -- free flight ---------------------------------------------------------------
+def test_can_engage_rules(system):
+    from space_shooter.campaign import can_engage
+
+    s = new_campaign(system)
+    assert can_engage(system, s, "o1") and can_engage(system, s, "m5")  # no adjacency needed in flight
+    assert not can_engage(system, s, "home")
+    s.owner["o1"] = "player"
+    assert not can_engage(system, s, "o1")
+    assert not can_engage(system, s, "c1") and not can_engage(system, s, "c2")
+    for n in system.ring_ids("middle"):
+        s.owner[n] = "player"
+    assert can_engage(system, s, "c1") and not can_engage(system, s, "c2")
+    s.owner["c1"] = "player"
+    assert can_engage(system, s, "c2")
+
+
+def test_encounter_for_twists(system):
+    from space_shooter.campaign import encounter_for
+
+    s = new_campaign(system)
+    s.hive_age["o6"] = 3
+    plain, swarmed, hive = (encounter_for(system, s, n) for n in ("o1", "o5", "o6"))
+    assert plain.name == "COLD WAKE FIELD" and plain.hull == 1.0
+    assert swarmed.hull == pytest.approx(1.25)
+    assert hive.hull == pytest.approx(1.5)
+    assert [e.at for e in hive.script] == pytest.approx([e.at * 0.8 for e in ENCOUNTERS[3].script])
+
+
+def test_claim_records_once(system):
+    from space_shooter.campaign import claim
+
+    s = new_campaign(system)
+    s.hive_age["o5"] = 4
+    claim(s, "o1")
+    claim(s, "o1")
+    claim(s, "o5")
+    assert s.owner["o1"] == "player" and s.claimed_this_loop == ["o1", "o5"] and "o5" not in s.hive_age
+
+
+def test_end_turn_dock_banks_all(system):
+    from space_shooter.campaign import claim, end_turn
+
+    s = new_campaign(system)
+    claim(s, "o1")
+    report = end_turn(system, s, carried=500, died=False, warden_killed=False, rng=random.Random(0))
+    assert report.salvage_gained == 600 and s.salvage == 600
+    assert report.claimed == ["o1"] and s.claimed_this_loop == [] and s.turn == 1
+
+
+def test_end_turn_death_banks_half(system):
+    from space_shooter.campaign import end_turn
+
+    s = new_campaign(system)
+    report = end_turn(system, s, carried=501, died=True, warden_killed=False, rng=random.Random(0))
+    assert report.salvage_gained == 250 and s.salvage == 250
+
+
+def test_end_turn_warden_wins(system):
+    from space_shooter.campaign import end_turn
+
+    s = new_campaign(system)
+    before = dict(s.owner)
+    report = end_turn(system, s, carried=0, died=False, warden_killed=True, rng=random.Random(0))
+    assert s.status == "won" and report.status == "won" and s.owner == before
+
+
+def test_patrol_count(system):
+    from space_shooter.campaign import patrol_count
+
+    s = new_campaign(system)
+    assert patrol_count(s) == 1
+    for n in ("o1", "o2", "o3", "o4", "m1", "m2", "m3"):
+        s.owner[n] = "swarm"
+    s.hive_age.update({"o5": 3, "o6": 3, "o3": 3})
+    assert patrol_count(s) == 6
+
+
+def test_claimed_this_loop_round_trips(system):
+    s = new_campaign(system)
+    s.claimed_this_loop = ["o1"]
+    assert CampaignState.from_dict(s.to_dict()).claimed_this_loop == ["o1"]
+    raw = s.to_dict()
+    del raw["claimed_this_loop"]
+    assert CampaignState.from_dict(raw).claimed_this_loop == []
+
+
+def test_damaged_state_rejected(system):
+    with pytest.raises(ValueError):
+        CampaignState.from_dict({"owner": [1, 2]})
+    with pytest.raises(ValueError):
+        CampaignState.from_dict({"owner": {"home": "player"}, "hive_age": [3]})
+    raw = new_campaign(system).to_dict()
+    raw["requisition"] = ["bogus", "claw"]
+    assert CampaignState.from_dict(raw).requisition == ["claw"]

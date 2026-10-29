@@ -131,6 +131,19 @@ ENCOUNTERS: tuple[Encounter, ...] = (
     Encounter(WARDEN_INDEX, "THE WARDEN", None, (_e(0, "single", "warden", 1),)),
 )
 
+# A patrol caught the tug in flight: one short wave, fought for salvage, never for ground.
+AMBUSH = Encounter(
+    6,
+    "AMBUSH",
+    25,
+    (
+        _e(1, "vee", "drone", 4),
+        _e(6, "pincer", "zigzag", 2),
+        _e(12, "line", "drone", 4, 0.4),
+        _e(17, "column", "zigzag", 3, 0.6),
+    ),
+)
+
 
 def loop_hull_multiplier(loop: int) -> float:
     """Enemy hull scale for a given loop number (loop 1 is unscaled)."""
@@ -165,12 +178,17 @@ def expand(entry: SpawnEntry, rng: random.Random) -> list[Spawn]:
 class EncounterDirector:
     """Drift -> active -> clearing -> next drift ... -> complete after the Warden."""
 
-    def __init__(self, rng: random.Random, encounters: tuple[Encounter, ...] = ENCOUNTERS) -> None:
+    def __init__(
+        self,
+        rng: random.Random,
+        encounters: tuple[Encounter, ...] = ENCOUNTERS,
+        first_drift: float = DRIFT_TIME,
+    ) -> None:
         self.rng = rng
         self.encounters = encounters
         self.index = 0
         self.state = "drift"
-        self.timer = DRIFT_TIME
+        self.timer = first_drift
         self.t_rel = 0.0
         self.plan: list[Spawn] = []
         self.cursor = 0

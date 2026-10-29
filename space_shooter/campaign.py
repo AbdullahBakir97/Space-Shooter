@@ -24,6 +24,7 @@ HIVE_AGE = 3  # turns of swarm control before ground becomes a hive
 PART_COST = 800
 FORTIFY_COST = 1000
 MAX_REQUISITION = 2
+MAX_PATROLS = 6
 PART_KINDS = ("turret", "slug", "tractor", "armour", "thruster", "claw")
 
 
@@ -107,6 +108,7 @@ class CampaignState:
     turn: int = 0
     status: str = "active"  # active | won | lost
     requisition: list[str] = field(default_factory=list)
+    claimed_this_loop: list[str] = field(default_factory=list)
 
     def held(self) -> list[str]:
         return [n for n, o in self.owner.items() if o == "player"]
@@ -123,18 +125,23 @@ class CampaignState:
             "turn": self.turn,
             "status": self.status,
             "requisition": list(self.requisition),
+            "claimed_this_loop": list(self.claimed_this_loop),
         }
 
     @classmethod
     def from_dict(cls, raw: dict) -> CampaignState:
+        owner, hive_age = raw["owner"], raw.get("hive_age", {})
+        if not isinstance(owner, dict) or not isinstance(hive_age, dict):
+            raise ValueError("damaged campaign: owner and hive_age must be maps")
         return cls(
-            owner={str(k): str(v) for k, v in raw["owner"].items()},
-            hive_age={str(k): int(v) for k, v in raw.get("hive_age", {}).items()},
+            owner={str(k): str(v) for k, v in owner.items()},
+            hive_age={str(k): int(v) for k, v in hive_age.items()},
             fortified=set(raw.get("fortified", [])),
             salvage=int(raw.get("salvage", 0)),
             turn=int(raw.get("turn", 0)),
             status=str(raw.get("status", "active")),
-            requisition=[str(k) for k in raw.get("requisition", [])],
+            requisition=[str(k) for k in raw.get("requisition", []) if k in PART_KINDS],
+            claimed_this_loop=[str(k) for k in raw.get("claimed_this_loop", [])],
         )
 
 
@@ -189,6 +196,62 @@ def valid_prefix(system: System, state: CampaignState, route: list[str]) -> list
         if valid_route(system, state, route[:end]):
             return list(route[:end])
     return []
+
+
+def can_engage(system: System, state: CampaignState, node_id: str) -> bool:
+    """In flight any location can be fought, except home, your own ground and sealed ones."""
+    if node_id not in system.nodes or node_id == HOME or state.owner.get(node_id) == "player":
+        return False
+    return not locked(system, state, node_id)
+
+
+def encounter_for(system: System, state: CampaignState, node_id: str) -> Encounter:
+    """The location's base encounter, renamed, toughened on swarm ground and hives."""
+    node = system.nodes[node_id]
+    base = ENCOUNTERS[node.template]
+    enc = replace(base, name=node.name)
+    if state.is_hive(node_id):
+        script = tuple(replace(e, at=e.at * HIVE_PACE) for e in base.script)
+        return replace(enc, hull=HIVE_HULL, script=script)
+    if state.owner.get(node_id) == "swarm":
+        return replace(enc, hull=SWARM_HULL)
+    return enc
+
+
+def claim(state: CampaignState, node_id: str) -> None:
+    """A fight won: the ground is yours at once."""
+    state.owner[node_id] = "player"
+    state.hive_age.pop(node_id, None)
+    if node_id not in state.claimed_this_loop:
+        state.claimed_this_loop.append(node_id)
+
+
+def patrol_count(state: CampaignState) -> int:
+    swarm = sum(1 for o in state.owner.values() if o == "swarm")
+    hives = sum(1 for n in state.owner if state.is_hive(n))
+    return min(MAX_PATROLS, swarm // 2 + hives)
+
+
+def end_turn(
+    system: System,
+    state: CampaignState,
+    carried: int,
+    died: bool,
+    warden_killed: bool,
+    rng: random.Random,
+) -> TurnReport:
+    """Close a flown loop: bank what was carried (half on death), pay yields, then the swarm moves."""
+    report = TurnReport(claimed=list(state.claimed_this_loop))
+    state.claimed_this_loop = []
+    banked = carried // 2 if died else carried
+    report.salvage_gained = banked + sum(system.nodes[n].yield_ for n in state.held())
+    state.salvage += report.salvage_gained
+    if warden_killed:
+        state.status = report.status = "won"
+    else:
+        swarm_turn(system, state, rng, report)
+    state.turn += 1
+    return report
 
 
 def route_encounters(system: System, state: CampaignState, route: list[str]) -> tuple[Encounter, ...]:

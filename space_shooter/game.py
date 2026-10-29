@@ -151,7 +151,7 @@ class Game:
         if raw is not None:
             try:
                 state = CampaignState.from_dict(raw)
-            except (KeyError, TypeError, ValueError):
+            except (AttributeError, KeyError, TypeError, ValueError):
                 state = None
         if state is None or state.status != "active" or set(state.owner) != set(self.system.nodes):
             state = new_campaign(self.system)

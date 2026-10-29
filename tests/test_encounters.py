@@ -146,3 +146,22 @@ def test_director_counts_cleared():
     assert d.cleared == 1
     clear_all(d)
     assert d.cleared == 2
+
+
+def test_ambush_encounter():
+    from space_shooter.encounters import AMBUSH
+
+    assert AMBUSH.index == 6 and AMBUSH.time_cap == 25
+    assert {e.kind for e in AMBUSH.script} <= {"drone", "zigzag"} and AMBUSH.script
+
+
+def test_director_first_drift():
+    import random
+
+    from space_shooter.encounters import ENCOUNTERS, EncounterDirector
+
+    d = EncounterDirector(random.Random(0), (ENCOUNTERS[0],), first_drift=1.5)
+    d.update(1.4, 0)
+    assert d.state == "drift"
+    d.update(0.2, 0)
+    assert d.state == "active"
