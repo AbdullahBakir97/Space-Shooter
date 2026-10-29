@@ -182,3 +182,19 @@ def test_warden_victory_completes_act(game):
 @pytest.mark.parametrize("reached,word", [(0, "ash"), (1, "shelf"), (2, "graveyard"), (3, "picket"), (4, "star")])
 def test_closing_line_matches_where_the_loop_ended(game, reached, word):
     assert word in LoopEndScene(game, RunResult(1, reached, 0, 1.0)).closing_line.lower()
+
+
+def test_hangar_decodes_echoes_once(game, monkeypatch):
+    from space_shooter import echoes
+    from tests.test_gameplay import seeded_trace
+
+    game.save.read_logs.append("a1_open")
+    game.save.echoes = [seeded_trace(n).to_data() for n in range(1, 6)]
+    calls = []
+    original = echoes.EchoTrace.from_data
+    monkeypatch.setattr(echoes.EchoTrace, "from_data", classmethod(lambda cls, d: calls.append(1) or original(d)))
+    h = HangarScene(game)
+    game.scenes.push(h)
+    for _ in range(10):
+        h.draw(game.screen)
+    assert len(calls) <= 5

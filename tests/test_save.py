@@ -93,3 +93,29 @@ def test_game_persist_sets_notice_when_unwritable(tmp_path, monkeypatch):
     game.persist()
     assert game.save.notice == "Progress could not be saved."
     pygame.quit()
+
+
+@pytest.mark.parametrize(
+    "bad_echo",
+    [
+        {"loop": 2, "reached": 1, "duration": 30.0, "samples": "%%%not base64%%%", "loadouts": []},
+        {"loop": 2, "reached": 1, "duration": 30.0, "samples": "QUJD", "loadouts": []},  # 3 bytes: truncated
+        {"loop": 2, "reached": 1, "duration": 30.0, "samples": "", "loadouts": [{"t": 0.0, "parts": {}}]},
+    ],
+)
+def test_damaged_echo_is_dropped_with_notice(tmp_path, bad_echo):
+    import json
+
+    good = {"loop": 3, "reached": 0, "duration": 12.0, "samples": pack_samples([(0, 0.0, 1, 2, False)]), "loadouts": []}
+    (tmp_path / "save.json").write_text(json.dumps({"version": 1, "loop": 5, "echoes": [bad_echo, good]}))
+    d = load_save(tmp_path)
+    assert d.loop == 5 and [e.loop for e in d.echoes] == [3] and d.notice
+
+
+def test_damaged_record_is_dropped(tmp_path):
+    import json
+
+    payload = {"version": 1, "loop": 2, "records": [{"loop": 1, "reached": "far", "salvage": 1, "time": 1.0}]}
+    (tmp_path / "save.json").write_text(json.dumps(payload))
+    d = load_save(tmp_path)
+    assert d.records == [] and d.loop == 2 and d.notice

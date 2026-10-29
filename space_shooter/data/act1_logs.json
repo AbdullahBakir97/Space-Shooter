@@ -6,7 +6,7 @@
   {"id": "a1_empty_channel", "speaker": "pilot", "when": "reached >= 1", "priority": 10, "lines": [
     "Nobody answered.",
     "I keep the channel open. It makes the cockpit less quiet."]},
-  {"id": "a1_ash", "speaker": "fleet", "when": "reached >= 2", "priority": 10, "lines": [
+  {"id": "a1_ash", "speaker": "fleet", "when": "reached >= 1", "priority": 12, "lines": [
     "...ash shelf... visibility nil... do not engage...",
     "(automated fleet beacon, looping)"]},
   {"id": "a1_loop2", "speaker": "pilot", "when": "loop >= 2", "priority": 50, "lines": [
@@ -24,13 +24,13 @@
   {"id": "a1_first_echo_lost", "speaker": "pilot", "when": "flag:first_echo_lost", "priority": 60, "lines": [
     "One of them broke apart in front of me.",
     "It didn't come back this loop. That one is really gone."]},
-  {"id": "a1_graveyard", "speaker": "fleet", "when": "reached >= 3", "priority": 20, "lines": [
+  {"id": "a1_graveyard", "speaker": "fleet", "when": "reached >= 2", "priority": 20, "lines": [
     "Graveyard. Forty-one hulls logged. No survivors.",
     "Recovery crews: strip what you can. Leave the names."]},
-  {"id": "a1_picket", "speaker": "fleet", "when": "reached >= 4", "priority": 20, "lines": [
+  {"id": "a1_picket", "speaker": "fleet", "when": "reached >= 3", "priority": 20, "lines": [
     "Picket line holding. Picket line holding. Picket line",
     "(signal ends)"]},
-  {"id": "a1_last_light", "speaker": "pilot", "when": "reached >= 5", "priority": 25, "lines": [
+  {"id": "a1_last_light", "speaker": "pilot", "when": "reached >= 4", "priority": 25, "lines": [
     "The star flares when it breathes.",
     "Get behind something dead. That's the whole trick now."]},
   {"id": "a1_warden_seen", "speaker": "unknown", "when": "flag:warden_seen", "priority": 70, "lines": [

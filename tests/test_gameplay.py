@@ -9,13 +9,13 @@ from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
 from space_shooter.echoes import EchoTrace
 from space_shooter.encounters import DRIFT_TIME, loop_hull_multiplier
 from space_shooter.entities.bullets import EnemyBullet, PlayerBullet
-from space_shooter.entities.enemies import Drone
+from space_shooter.entities.enemies import ENEMY_CLASSES, Drone
 from space_shooter.entities.hazards import AshCloud, Debris, Hulk
 from space_shooter.entities.parts import Drop
 from space_shooter.game import Game
 from space_shooter.salvage import PATCH_HULL, SLOT_OFFSETS, Part
 from space_shooter.save import load_save
-from space_shooter.scenes.gameplay import GameplayScene
+from space_shooter.scenes.gameplay import ECHO_RAM_DAMAGE, GameplayScene
 from space_shooter.scenes.log_panel import LogPanel
 from space_shooter.settings_store import Settings
 from space_shooter.story import BAD_LOGS_NOTICE, LogDirector
@@ -365,7 +365,7 @@ def test_next_drift_plays_next_eligible_log(story_game):
     scene.director.index = 1
     scene.director._events.append(("drift_start", 1))
     run_frames(game, 1)
-    assert isinstance(game.scenes.top, LogPanel) and game.scenes.top.entry.id == "a1_empty_channel"
+    assert isinstance(game.scenes.top, LogPanel) and game.scenes.top.entry.id == "a1_ash"  # warns before Ash Shelf
 
 
 def test_log_panel_completes_then_closes(story_game):
@@ -404,3 +404,44 @@ def test_bad_log_data_starts_silent_with_notice(tmp_path, monkeypatch):
     run_frames(g, 60)
     assert g.scenes.top is scene
     pygame.quit()
+
+
+def test_ash_cloud_hides_but_does_not_destroy_player_bullets(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    scene.hazards.add(AshCloud((400, 300)))
+    bullet = PlayerBullet((400, 320), (0, 0), 1)
+    scene.player_bullets.add(bullet)
+    run_frames(game, 3)
+    assert bullet.alive()
+
+
+def test_last_light_has_shelter_from_the_flare(game):
+    scene = start_at(game, 4)
+    hulks = [h for h in scene.hazards if isinstance(h, Hulk)]
+    assert hulks and all(h.vy <= 2.0 for h in hulks)  # still on screen when the flare comes at 45 s
+
+
+def test_echo_contact_damage_has_a_cooldown(game):
+    game.save.echoes = [seeded_trace(9, x=400.0).to_data()]
+    scene = start_at(game, 0)
+    run_frames(game, 2)
+    echo = scene.live_echoes()[0]
+    gunner = ENEMY_CLASSES["gunner"](echo.x)
+    gunner.hp = gunner.max_hp = 99
+    scene.enemies.add(gunner)
+    for _ in range(30):  # half a second of overlap
+        gunner.x, gunner.y = echo.x, echo.y
+        gunner.rect.center = (round(echo.x), round(echo.y))
+        scene._collisions()
+    assert echo.hp == 6 - ECHO_RAM_DAMAGE and gunner.hp == 98
+
+
+def test_hud_does_not_mark_a_finished_echo_as_lost(game):
+    from space_shooter.hud import roster_status
+
+    game.save.echoes = [seeded_trace(5, seconds=1.0, reached=0).to_data()]
+    scene = start_at(game, 0)
+    run_frames(game, 60 * 3)
+    assert len(scene.echoes) == 0  # it faded out at the end of its recording
+    assert roster_status(scene) == [(5, False)]

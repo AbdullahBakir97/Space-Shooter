@@ -112,3 +112,13 @@ def test_reached_uses_records_or_override():
     save = SaveData(loop=4, records=[Record(1, 3, 0, 1.0), Record(2, 1, 0, 1.0)])
     assert state_from_save(save).reached == 3 and state_from_save(save).loop == 4
     assert state_from_save(save, reached=5).reached == 5
+
+
+@pytest.mark.parametrize(
+    "upcoming,expected", [(1, "a1_ash"), (2, "a1_graveyard"), (3, "a1_picket"), (4, "a1_last_light")]
+)
+def test_encounter_logs_play_in_the_drift_before_their_encounter(upcoming, expected):
+    # drift_start passes the index of the encounter about to begin as `reached`
+    earlier = {1: [], 2: ["a1_ash"], 3: ["a1_ash", "a1_graveyard"], 4: ["a1_ash", "a1_graveyard", "a1_picket"]}
+    d = LogDirector(load_logs(), read=["a1_open", "a1_empty_channel", *earlier[upcoming]])
+    assert d.next_log(S(reached=upcoming)).id == expected
