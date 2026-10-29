@@ -80,7 +80,7 @@ class MapScene(Scene):
             return
         from space_shooter.scenes.gameplay import GameplayScene
 
-        self.game.scenes.clear_to(GameplayScene(self.game, route=list(self.route)))
+        self.game.scenes.clear_to(GameplayScene(self.game))  # replaced by flight in the next task
 
     # -- scene protocol ------------------------------------------------------
     def handle_action(self, action: str) -> None:

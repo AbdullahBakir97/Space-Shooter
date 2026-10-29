@@ -7,7 +7,7 @@ import random
 
 import pygame
 
-from space_shooter import campaign, procgen
+from space_shooter import procgen
 from space_shooter.config import (
     DIFFICULTIES,
     ECHO_PRESSURE_FIRE,
@@ -24,7 +24,7 @@ from space_shooter.config import (
 )
 from space_shooter.echoes import EchoRecorder, EchoTrace, select_roster, store_trace
 from space_shooter.effects import Afterimage, Explosion, Flash, FloatingText, Particle, ScreenShake, burst, smoke
-from space_shooter.encounters import WARDEN_INDEX, EncounterDirector, Spawn, loop_hull_multiplier
+from space_shooter.encounters import WARDEN_INDEX, Encounter, EncounterDirector, Spawn, loop_hull_multiplier
 from space_shooter.entities.bullets import EnemyBullet, HeavySlug, SlugBullet
 from space_shooter.entities.echo import Echo
 from space_shooter.entities.enemies import ENEMY_CLASSES, Enemy
@@ -39,7 +39,6 @@ from space_shooter.salvage import (
     PATCH_HULL,
     SLOT_OFFSETS,
     SLOTS,
-    Part,
     part_from_code,
     roll_drop,
 )
@@ -67,16 +66,30 @@ ECHO_RAM_DAMAGE = 2
 ECHO_RAM_COOLDOWN = 0.6  # one ram per contact, like the player's brief invulnerability
 ASH_PERIOD = 5.0
 DEBRIS_PERIOD = 1.2
+FIGHT_DRIFT = 1.5  # the contact beat before a fight flown in from the star system
 
 
 class GameplayScene(Scene):
-    def __init__(self, game, seed: int | None = None, route: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        game,
+        seed: int | None = None,
+        run=None,
+        node_id: str | None = None,
+        encounter: Encounter | None = None,
+    ) -> None:
+        """Without a ``run`` this is the classic six-encounter Act 1 run. With one it is a single
+        fight flown in from the star system (``encounter`` at location ``node_id``, or an ambush)."""
         super().__init__(game)
         self.rng = random.Random(seed)
-        self.route: list[str] | None = None
-        self.campaign_state = None
+        self.run = run
+        self.node_id = node_id
         self.difficulty = DIFFICULTIES[game.settings.difficulty]
-        self.player = Player()
+        if run is None:
+            self.player = Player()
+        else:
+            self.player = run.player
+            self.player.ready_for_fight()
         self.rig = PartRig()
         self.player.turret_aim = self.rig.aim
         self.enemies: pygame.sprite.Group = pygame.sprite.Group()
@@ -87,10 +100,10 @@ class GameplayScene(Scene):
         self.effects: pygame.sprite.Group = pygame.sprite.Group()
         self.particles: pygame.sprite.Group = pygame.sprite.Group()
         self.texts: pygame.sprite.Group = pygame.sprite.Group()
-        if route is None:
-            self.director = EncounterDirector(self.rng)  # the classic Act 1 run
+        if run is None:
+            self.director = EncounterDirector(self.rng)
         else:
-            self._begin_campaign_turn(route)
+            self.director = EncounterDirector(self.rng, (encounter,), first_drift=FIGHT_DRIFT)
         self.loop = game.save.loop
         self.hull_mult = loop_hull_multiplier(self.loop)
         self.banner_text: str | None = None
@@ -103,9 +116,14 @@ class GameplayScene(Scene):
         self.hazard_timer = 0.0
         self.first_drop_pending = False
         self.tractor_target: tuple[float, float] | None = None
-        self.recorder = EchoRecorder(self.loop)
-        traces = [EchoTrace.from_data(d) for d in game.save.echoes]
-        roster = select_roster(traces)
+        if run is None:
+            self.recorder = EchoRecorder(self.loop)
+            roster = select_roster([EchoTrace.from_data(d) for d in game.save.echoes])
+        else:
+            self.recorder = run.recorder
+            roster = run.roster()
+        self.recording = True  # a fight of a type this loop already recorded is not recorded again
+        self.fight_over = False
         self.roster = [t.loop for t in roster]
         self.echoes: pygame.sprite.Group = pygame.sprite.Group(Echo(t) for t in roster)
         self.echo_bullets: pygame.sprite.Group = pygame.sprite.Group()
@@ -123,6 +141,11 @@ class GameplayScene(Scene):
         self.exhaust_timer = 0.0
 
     # -- world interface used by enemies ------------------------------------
+    @property
+    def echo_key(self) -> int:
+        """Echo segments follow encounter types in flown fights and run positions in the classic run."""
+        return self.director.encounter.index if self.run is not None else self.director.index
+
     @property
     def player_pos(self) -> tuple[float, float]:
         return (self.player.x, self.player.y)
@@ -174,6 +197,8 @@ class GameplayScene(Scene):
     # -- update --------------------------------------------------------------
     def update(self, dt: float) -> None:
         self.time += dt
+        if self.run is not None and self.run.result is None:
+            self.run.time += dt
         reduced = self.game.settings.reduced_flashing
         self.shake.enabled = self.game.settings.screen_shake
         self.shake.cap = 4.0 if reduced else 24.0
@@ -217,15 +242,17 @@ class GameplayScene(Scene):
             self._spawn(spawn)
         for event, value in self.director.drain_events():
             self._on_director_event(event, value)
+        if self.fight_over:
+            return
         self.game.starfield.boost = 2.0 if self.director.state == "drift" else 1.0
         self._update_hazards(dt)
         self._update_flare(dt)
         in_encounter = self.director.state in ("active", "clearing")
-        if in_encounter and self.player.alive_in_world:
+        if in_encounter and self.player.alive_in_world and self.recording:
             self.recorder.sample(self.director.t_rel, self.player.x, self.player.y)
         for echo in list(self.echoes):
             if in_encounter:
-                echo.update(dt, self.director.index, self.director.t_rel, self)
+                echo.update(dt, self.echo_key, self.director.t_rel, self)
             else:
                 echo.hide()
         self.echo_bullets.update(dt)
@@ -237,7 +264,8 @@ class GameplayScene(Scene):
             self.boss = None
 
         self._collisions()
-        self.recorder.note_loadout(self.player.loadout.to_codes())
+        if self.recording:
+            self.recorder.note_loadout(self.player.loadout.to_codes())
 
         if self.player.alive_in_world and self.player.health <= LOW_HEALTH_THRESHOLD:
             self.game.audio.loop("low_health")
@@ -290,6 +318,8 @@ class GameplayScene(Scene):
 
     def end_loop(self, victory: bool) -> RunResult:
         """Close this loop exactly once: keep the run as an echo, record it, advance, save."""
+        if self.run is not None:
+            return self._end_flown_loop(victory)
         if self.result is not None:
             return self.result
         save = self.game.save
@@ -300,68 +330,31 @@ class GameplayScene(Scene):
         record = Record(self.loop, reached, self.score, round(self.time, 1), self.game.settings.difficulty)
         add_record(save, record)
         save.loop += 1
-        report = self._close_campaign_turn(victory) if self.route is not None else None
         self.game.persist()
-        self.result = RunResult(
-            self.loop,
-            reached,
-            self.score,
-            self.time,
-            list(self.echoes_lost),
-            victory,
-            report=report,
-            cleared_route=self.route is not None and self.director.state == "complete" and not victory,
-            reached_name=self.director.encounter.name if self.route is not None else None,
-        )
+        self.result = RunResult(self.loop, reached, self.score, self.time, list(self.echoes_lost), victory)
         return self.result
 
-    # -- campaign turns -------------------------------------------------------
-    def _begin_campaign_turn(self, route: list[str]) -> None:
-        """Fly a planned route: trim it if the map changed, fit requisitioned parts, spend them."""
-        system = self.game.system
-        state = self.game.campaign()
-        route = campaign.valid_prefix(system, state, route)
-        if not route:  # nothing left of the plan: take the nearest open ground instead
-            options = [n for n in system.nodes if campaign.valid_route(system, state, [n])]
-            route = [min(options, key=lambda n: (system.distance_to_home(n), n))]
-        self.route = route
-        self.campaign_state = state
-        self.director = EncounterDirector(self.rng, campaign.route_encounters(system, state, route))
-        for kind in state.requisition:
-            free = [s for s in PART_TYPES[kind].slots if self.player.loadout.slots[s] is None]
-            if free:
-                self.player.loadout.attach(Part(kind), SLOT_OFFSETS[free[0]])
-        state.requisition = []
-        self.game.store_campaign(state)  # spent the moment the tug launches
+    # -- fights flown in from the star system ----------------------------------
+    def _end_flown_loop(self, victory: bool) -> RunResult:
+        run = self.run
+        if self.result is None and run.result is None:  # this fight's salvage rides with the tug
+            run.carried += self.score
+            run.last_fought = self.node_id or run.last_fought
+            if victory:
+                run.reached = max(run.reached, self.director.encounter.index)
+        self.result = run.finish(died=not victory, warden_killed=victory)
+        return self.result
 
-    def _close_campaign_turn(self, victory: bool):
-        system, state = self.game.system, self.campaign_state
-        cleared = self.director.cleared + (1 if victory and self.director.state != "complete" else 0)
-        report = campaign.apply_run(system, state, self.route, cleared, self.score, victory, self.rng)
-        flags = self.game.save.flags
-        if report.claimed:
-            flags.add("node_claimed")
-        if report.lost:
-            flags.add("node_lost")
-        if report.hives:
-            flags.add("hive_formed")
-        if report.home_threatened:
-            flags.add("home_threatened")
-        if not campaign.locked(system, state, campaign.GATE):
-            flags.add("gate_open")
-        if state.status == "lost":
-            flags.add("war_lost")
-        self.game.save.campaign = state.to_dict()
-        return report
-
-    def _route_cleared(self) -> None:
-        if self.result is not None:  # the Warden's fall already closed the loop
+    def _fight_won(self) -> None:
+        """The location is clear: claim it and fly on from where the fight began."""
+        if self.result is not None or self.fight_over:
             return
-        from space_shooter.scenes.loop_end import LoopEndScene
-
-        self.death_timer = float("inf")
+        self.fight_over = True
+        self.run.last_fought = self.node_id or self.run.last_fought
+        self.run.win_fight(self.node_id, self.director.encounter.index, self.score)
         self.game.audio.stop_all_loops()
-        self.game.scenes.push(LoopEndScene(self.game, self.end_loop(victory=False)))
+        if self.game.scenes.top is self:
+            self.game.scenes.pop()
 
     def _afterimages(self, dt: float) -> None:
         if not self.player.dash.active:
@@ -388,9 +381,12 @@ class GameplayScene(Scene):
             self._play_due_log(self.director.encounters[value].index)
         elif event == "encounter_start":
             self.game.audio.set_bed_level(0.25)
-            self.recorder.begin_encounter(value)
-            self.recorder.note_loadout({})
-            self.recorder.note_loadout(self.player.loadout.to_codes())
+            key = self.echo_key
+            self.recording = self.run is None or not self.recorder.has_encounter(key)
+            if self.recording:
+                self.recorder.begin_encounter(key)
+                self.recorder.note_loadout({})
+                self.recorder.note_loadout(self.player.loadout.to_codes())
             enc = self.director.encounter
             self.banner_text = enc.name
             self.banner_timer = BANNER_TIME
@@ -400,8 +396,8 @@ class GameplayScene(Scene):
                     self.hazards.add(Hulk((fx * WIDTH, y), seed=i))
         elif event == "moment":
             self.trigger_moment(value)
-        elif event == "run_complete" and self.route is not None:
-            self._route_cleared()
+        elif event == "run_complete" and self.run is not None:
+            self._fight_won()
         elif event == "retreat":
             for enemy in self.enemies:
                 enemy.retreat()
@@ -484,7 +480,7 @@ class GameplayScene(Scene):
         x = SPAWN_MARGIN + spawn.x_frac * (WIDTH - 2 * SPAWN_MARGIN)
         # a strong roster draws a stronger response; count echoes flying this encounter even if they
         # have not been placed yet this frame (the Warden spawns on the encounter's very first tick)
-        live = sum(1 for e in self.echoes if e.alive() and e.playback.has_encounter(self.director.index))
+        live = sum(1 for e in self.echoes if e.alive() and e.playback.has_encounter(self.echo_key))
         kwargs = dict(
             hp_mult=self.difficulty.enemy_hp
             * self.hull_mult
@@ -623,6 +619,8 @@ class GameplayScene(Scene):
         self.effects.add(Explosion(echo.rect.center, scale=4))
         burst(self.particles, echo.rect.center, 16, (STEEL, ASH), 220, 0.7, 3, self.rng)
         self.echoes_lost.append(echo.loop)
+        if self.run is not None:
+            self.run.lost_echoes.append(echo.loop)
         self.radio(f"Echo {echo.loop} is gone.")
         self.game.persist()
 

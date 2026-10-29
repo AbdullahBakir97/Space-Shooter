@@ -3,7 +3,6 @@ import pytest
 
 from space_shooter.game import Game
 from space_shooter.save import load_save
-from space_shooter.scenes.gameplay import GameplayScene
 from space_shooter.scenes.hangar import HangarScene
 from space_shooter.scenes.map import MapScene
 from space_shooter.scenes.shipyard import ShipyardScene
@@ -55,17 +54,6 @@ def test_map_builds_only_valid_routes(game):
     m.selected = "o1"
     m.toggle()
     assert m.route == []  # removing a stop drops everything after it
-
-
-def test_map_launch_starts_route(game):
-    m = open_map(game)
-    m.launch()
-    assert game.scenes.top is m  # nothing planned yet
-    m.selected = "o1"
-    m.toggle()
-    key(game, pygame.K_l)
-    top = game.scenes.top
-    assert isinstance(top, GameplayScene) and top.route == ["o1"]
 
 
 def test_map_fortify_spends_salvage(game):

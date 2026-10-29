@@ -46,6 +46,14 @@ class Player(pygame.sprite.Sprite):
         self.tilt = 0.0
         self.last_outcome: HitOutcome | None = None
 
+    def ready_for_fight(self) -> None:
+        """Back at the bottom of a fresh field; hull, parts and dash carry over."""
+        self.rect.midbottom = (WIDTH // 2, HEIGHT - 24)
+        self.x, self.y = float(self.rect.centerx), float(self.rect.centery)
+        self.invuln_timer = max(self.invuln_timer, 1.0)
+        self.fire_cooldown = 0.0
+        self.tilt = 0.0
+
     @property
     def alive_in_world(self) -> bool:
         return not self.dead

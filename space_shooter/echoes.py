@@ -55,11 +55,16 @@ class EchoRecorder:
         self._fired = False
         self._now = 0.0
         self._codes: dict[str, str] = {}
+        self._begun: set[int] = set()
 
     def begin_encounter(self, index: int) -> None:
+        self._begun.add(index)
         self.encounter = index
         self._count = 0
         self._now = 0.0
+
+    def has_encounter(self, index: int) -> bool:
+        return index in self._begun
 
     def note_fire(self) -> None:
         self._fired = True

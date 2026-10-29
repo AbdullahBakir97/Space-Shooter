@@ -174,6 +174,8 @@ class Game:
         for scene in self.scenes.stack:
             if isinstance(scene, GameplayScene):
                 scene.end_loop(victory=False)
+            elif getattr(scene, "run", None) is not None:  # flying the star system between fights
+                scene.run.finish(died=True)
 
     def quit(self) -> None:
         self.running = False
