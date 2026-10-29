@@ -19,15 +19,17 @@ PLAYER_COLLISION_DAMAGE = 35
 PLAYER_BULLET_DAMAGE = 1  # enemy HP is counted in bullet hits
 WEAPON_COOLDOWN = 0.2  # main gun, seconds between shots
 BULLET_SPEED = 820.0
-ENEMY_BULLET_SPEED = 260.0
+ENEMY_BULLET_SPEED = 290.0
 
 # --- Enemies ----------------------------------------------------------------
 ENEMY_BASE_SPEED = 120.0
 ENEMY_SCORE = {"drone": 100, "zigzag": 150, "diver": 200, "gunner": 300, "warden": 5000}  # salvage value
 ENEMY_HP = {"drone": 1, "zigzag": 2, "diver": 1, "gunner": 3}
-WARDEN_BASE_HP = 160  # hits, before difficulty
-LOOP_HULL_STEP = 0.03  # enemy hull grows 3% per loop...
-LOOP_HULL_CAP = 0.45  # ...up to +45%
+WARDEN_BASE_HP = 260  # hits, before difficulty
+LOOP_HULL_STEP = 0.04  # enemy hull grows 4% per loop...
+LOOP_HULL_CAP = 0.60  # ...up to +60%
+ECHO_PRESSURE_HULL = 0.08  # per live echo when an enemy spawns
+ECHO_PRESSURE_FIRE = 0.10
 
 
 # --- Effects ----------------------------------------------------------------
@@ -49,9 +51,9 @@ class Difficulty:
 
 
 DIFFICULTIES: dict[str, Difficulty] = {
-    "easy": Difficulty("Easy", 0.85, 0.8, 0.7, 0.8),
-    "normal": Difficulty("Normal", 1.0, 1.0, 1.0, 1.0),
-    "hard": Difficulty("Hard", 1.25, 1.4, 1.5, 1.5),
+    "easy": Difficulty("Easy", 1.0, 1.0, 1.0, 0.8),
+    "normal": Difficulty("Normal", 1.25, 1.4, 1.5, 1.0),
+    "hard": Difficulty("Hard", 1.4, 1.8, 2.0, 1.5),
 }
 DIFFICULTY_ORDER = ["easy", "normal", "hard"]
 

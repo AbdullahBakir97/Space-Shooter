@@ -167,8 +167,8 @@ def test_encounter_spawns_after_drift(game):
 
 def test_loop_scaling_caps():
     assert loop_hull_multiplier(1) == 1.0
-    assert loop_hull_multiplier(5) == pytest.approx(1.12)
-    assert loop_hull_multiplier(30) == pytest.approx(1.45)
+    assert loop_hull_multiplier(5) == pytest.approx(1.16)
+    assert loop_hull_multiplier(30) == pytest.approx(1.60)
 
 
 def test_loop_scaling_applies_to_enemy_hull(game):
@@ -177,7 +177,7 @@ def test_loop_scaling_applies_to_enemy_hull(game):
     run_frames(game, 60 * 3)
     zig = [e for e in scene.enemies if e.kind == "drone"]
     assert zig and all(e.max_hp >= 1 for e in zig)
-    assert scene.hull_mult == pytest.approx(1.45)
+    assert scene.hull_mult == pytest.approx(1.60)
 
 
 def test_aim_point_prefers_armour(game):
@@ -331,7 +331,10 @@ def test_finished_echo_fades_out(game):
 def test_death_stores_trace_and_advances_loop(game):
     scene = start_at(game, 0)
     run_frames(game, 60 * 6)
-    scene.player.take_damage(999, random.Random(0))
+    rng = random.Random(0)
+    while not scene.player.dead:  # parts or a warm-up ram may absorb the first lethal hits
+        scene.player.invuln_timer = 0
+        scene.player.take_damage(999, rng)
     run_frames(game, 2)
     assert game.save.loop == 2 and len(game.save.echoes) == 1
     stored = EchoTrace.from_data(game.save.echoes[0])
@@ -445,3 +448,11 @@ def test_hud_does_not_mark_a_finished_echo_as_lost(game):
     run_frames(game, 60 * 3)
     assert len(scene.echoes) == 0  # it faded out at the end of its recording
     assert roster_status(scene) == [(5, False)]
+
+
+def test_difficulty_table():
+    from space_shooter.config import DIFFICULTIES, ENEMY_BULLET_SPEED
+
+    rows = {k: (d.enemy_speed, d.enemy_hp, d.enemy_fire_rate, d.score_mult) for k, d in DIFFICULTIES.items()}
+    assert rows == {"easy": (1.0, 1.0, 1.0, 0.8), "normal": (1.25, 1.4, 1.5, 1.0), "hard": (1.4, 1.8, 2.0, 1.5)}
+    assert ENEMY_BULLET_SPEED == 290.0

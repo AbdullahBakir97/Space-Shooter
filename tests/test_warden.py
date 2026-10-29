@@ -44,15 +44,15 @@ def test_registered_as_warden_kind():
 
 
 def test_hp_scales_with_difficulty():
-    assert Warden(400.0).max_hp == 160 and Warden(400.0, hp_mult=1.4).max_hp == 224
+    assert Warden(400.0).max_hp == 260 and Warden(400.0, hp_mult=1.4).max_hp == 364
 
 
 def test_phases():
     w = Warden(400.0)
     assert w.phase == 1
-    w.hit(55)
+    w.hit(89)
     assert w.phase == 2
-    w.hit(53)
+    w.hit(86)
     assert w.phase == 3
 
 

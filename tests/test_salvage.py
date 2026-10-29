@@ -4,7 +4,9 @@ import pytest
 
 from space_shooter.salvage import (
     DROP_BASE,
+    PAIR_NAMES,
     PART_TYPES,
+    PATCH_HULL,
     SLOTS,
     Loadout,
     Part,
@@ -89,8 +91,8 @@ def test_claw_raises_drop_chance_and_patch_share():
     lo = Loadout()
     lo.attach(Part("claw"), (14, -30))
     assert lo.drop_chance(DROP_BASE) == pytest.approx(0.27)
-    assert lo.patch_share() == pytest.approx(0.35)
-    assert Loadout().patch_share() == pytest.approx(0.2)
+    assert lo.patch_share() == pytest.approx(0.25)
+    assert Loadout().patch_share() == pytest.approx(0.10)
 
 
 def test_roll_drop_distribution():
@@ -108,3 +110,62 @@ def test_codes_round_trip_ignores_unknown():
     assert Loadout.from_codes(lo.to_codes() | {"aft_l": "laser"}).to_codes() == lo.to_codes()
     assert part_from_code("slug*") == Part("slug", rare=True)
     assert part_from_code("laser") is None
+
+
+def fitted(*specs):
+    lo = Loadout()
+    for kind, contact, *rare in specs:
+        lo.attach(Part(kind, rare=bool(rare)), contact)
+    return lo
+
+
+FORE_L, FORE_R, WING_L, WING_R, AFT_L, AFT_R = (-14, -30), (14, -30), (-30, 2), (30, 2), (-16, 30), (16, 30)
+
+
+def test_pairs_detected_in_type_order():
+    lo = fitted(("thruster", AFT_L), ("thruster", AFT_R), ("turret", WING_L), ("turret", WING_R), ("slug", FORE_L))
+    assert lo.pairs() == ["turret", "thruster"]
+    assert PAIR_NAMES["turret"] == "TWIN TURRETS" and PAIR_NAMES["claw"] == "SCRAPPER"
+    assert Loadout().pairs() == []
+
+
+def test_heavy_every():
+    assert Loadout().heavy_every() is None
+    assert fitted(("slug", FORE_L)).heavy_every() == 4
+    assert fitted(("slug", FORE_L), ("slug", FORE_R)).heavy_every() == 3
+
+
+def test_bulkhead_tops_up_plates():
+    lo = fitted(("armour", WING_L))
+    assert lo.armour_hits() == 2 and lo.slots["wing_l"].armour_left == 2
+    lo.absorb_hit(random.Random(0))
+    lo.attach(Part("armour"), WING_R)
+    assert lo.armour_hits() == 3
+    assert lo.slots["wing_l"].armour_left == 3 and lo.slots["wing_r"].armour_left == 3
+
+
+def test_dash_numbers_from_loadout():
+    assert Loadout().dash_charges() == 0
+    one = fitted(("thruster", AFT_L))
+    assert one.dash_charges() == 1 and one.dash_recharge() == pytest.approx(2.5)
+    two = fitted(("thruster", AFT_L), ("thruster", AFT_R, "rare"))
+    assert two.dash_charges() == 2 and two.dash_recharge() == pytest.approx(1.5)
+    scarred = fitted(("thruster", AFT_L, "rare"), ("thruster", AFT_R, "rare"))
+    assert scarred.dash_recharge() == pytest.approx(1.0)
+
+
+def test_turret_period_and_tractor_range():
+    assert fitted(("turret", WING_L)).turret_period() == pytest.approx(0.5)
+    assert fitted(("turret", WING_L), ("turret", WING_R)).turret_period() == pytest.approx(0.35)
+    assert Loadout().tractor_range() == 0
+    assert fitted(("tractor", AFT_L)).tractor_range() == 360
+    assert fitted(("tractor", AFT_L), ("tractor", AFT_R)).tractor_range() >= 2000
+
+
+def test_scrapper():
+    assert not fitted(("claw", FORE_L)).drops_scarred()
+    assert fitted(("claw", FORE_L), ("claw", FORE_R)).drops_scarred()
+
+
+def test_patch_values():
+    assert PATCH_HULL == 20

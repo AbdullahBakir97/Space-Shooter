@@ -18,7 +18,7 @@ SLOT_OFFSETS: dict[str, tuple[int, int]] = {
 
 KNOCK_CHANCE = 0.35
 DROP_BASE = 0.18
-PATCH_HULL = 25
+PATCH_HULL = 20
 ARMOUR_HITS = 2
 RARE_EFFECT = 1.5
 
@@ -41,6 +41,14 @@ PART_TYPES: dict[str, PartType] = {
     "armour": PartType("armour", SLOTS, "ARMOUR PLATE"),
     "thruster": PartType("thruster", _slots("aft"), "THRUSTER"),
     "claw": PartType("claw", _slots("fore"), "SALVAGE CLAW"),
+}
+PAIR_NAMES = {
+    "turret": "TWIN TURRETS",
+    "slug": "BROADSIDE",
+    "tractor": "GRAVITY WELL",
+    "armour": "BULKHEAD",
+    "thruster": "AFTERBURNER",
+    "claw": "SCRAPPER",
 }
 PART_DROP_WEIGHTS = {"turret": 25, "slug": 15, "tractor": 15, "armour": 20, "thruster": 15, "claw": 10}
 
@@ -95,6 +103,13 @@ class Loadout:
             ejected = self._remove(slot)
         self.slots[slot] = part
         self._order.append(slot)
+        if part.kind == "armour":
+            hits = self.armour_hits()
+            part.armour_left = hits
+            if hits > ARMOUR_HITS:  # BULKHEAD: every fitted plate is reinforced
+                for _, other in self.parts():
+                    if other.kind == "armour":
+                        other.armour_left = max(other.armour_left, hits)
         return slot, ejected
 
     def _remove(self, slot: str) -> Part | None:
@@ -136,7 +151,42 @@ class Loadout:
         return min(0.9, base * (1.0 + 0.5 * self.effect("claw")))
 
     def patch_share(self) -> float:
-        return 0.2 + 0.15 * min(1.0, self.effect("claw"))
+        return 0.10 + 0.15 * min(1.0, self.effect("claw"))
+
+    # -- signature moves and pair bonuses ------------------------------------
+    def pairs(self) -> list[str]:
+        """Kinds fitted twice or more, in PART_TYPES order."""
+        return [kind for kind in PART_TYPES if self.count(kind) >= 2]
+
+    def paired(self, kind: str) -> bool:
+        return self.count(kind) >= 2
+
+    def heavy_every(self) -> int | None:
+        if not self.count("slug"):
+            return None
+        return 3 if self.paired("slug") else 4
+
+    def armour_hits(self) -> int:
+        return ARMOUR_HITS + 1 if self.paired("armour") else ARMOUR_HITS
+
+    def dash_charges(self) -> int:
+        return min(2, self.count("thruster"))
+
+    def dash_recharge(self) -> float:
+        base = 2.0 if self.paired("thruster") else 2.5
+        scarred = sum(1 for _, p in self.parts() if p.kind == "thruster" and p.rare)
+        return max(1.0, base - 0.5 * scarred)
+
+    def turret_period(self) -> float:
+        return 0.35 if self.paired("turret") else 0.5
+
+    def tractor_range(self) -> float:
+        if not self.count("tractor"):
+            return 0.0
+        return 2000.0 if self.paired("tractor") else 360.0
+
+    def drops_scarred(self) -> bool:
+        return self.paired("claw")
 
     def to_codes(self) -> dict[str, str]:
         return {s: p.code for s, p in self.parts()}
