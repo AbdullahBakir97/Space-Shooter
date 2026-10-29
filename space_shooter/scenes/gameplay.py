@@ -28,7 +28,7 @@ from space_shooter.entities.hazards import AshCloud, Debris, Hulk
 from space_shooter.entities.parts import Drop, PartRig
 from space_shooter.entities.player import Player
 from space_shooter.hud import draw_hud
-from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL
+from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL, STEEL_DIM
 from space_shooter.salvage import DROP_BASE, PART_TYPES, PATCH_HULL, SLOT_OFFSETS, SLOTS, part_from_code, roll_drop
 from space_shooter.save import Record, add_record
 from space_shooter.scenes import salvage_ops
@@ -43,8 +43,6 @@ DEATH_BEAT = 1.2  # real seconds of slow motion before the loop-end card
 DEATH_TIME_SCALE = 0.3
 KNOCK_LIFETIME = 6.0
 KNOCK_PICKUP_DELAY = 0.8
-TRACTOR_RANGE = 180.0
-TRACTOR_SPEED = 220.0
 BANNER_TIME = 2.5
 BLACKOUT_TIME = 4.0
 FLARE_WARNING = 1.5
@@ -86,6 +84,7 @@ class GameplayScene(Scene):
         self.flare_timer = 0.0
         self.hazard_timer = 0.0
         self.first_drop_pending = False
+        self.tractor_target: tuple[float, float] | None = None
         self.recorder = EchoRecorder(self.loop)
         traces = [EchoTrace.from_data(d) for d in game.save.echoes]
         roster = select_roster(traces)
@@ -186,7 +185,8 @@ class GameplayScene(Scene):
                 self.game.audio.play("shoot")
         if self.player.alive_in_world:
             self.player_bullets.add(self.rig.update(dt, self.player.loadout, self.player_pos, self.enemies, 1.0))
-            self._tractor(dt)
+            self.tractor_target = salvage_ops.tractor(self, dt)
+            salvage_ops.drag_field(self)
         self._exhaust(dt)
         if self.player.alive_in_world:
             salvage_ops.claw_contacts(self, dt)
@@ -291,20 +291,6 @@ class GameplayScene(Scene):
             colour = self.rng.choice([STEEL, ASH, EMBER])
             self.particles.add(Particle((x, self.player.rect.bottom - 6), (0, 140), colour, 0.25, 3))
 
-    def _tractor(self, dt: float) -> None:
-        strength = self.player.loadout.effect("tractor")
-        if strength <= 0:
-            return
-        px, py = self.player_pos
-        for drop in self.drops:
-            dx, dy = px - drop.x, py - drop.y
-            dist = math.hypot(dx, dy)
-            if 0 < dist <= TRACTOR_RANGE or drop.lifetime is not None:
-                step = min(dist, TRACTOR_SPEED * strength * dt)
-                drop.x += dx / (dist or 1) * step
-                drop.y += dy / (dist or 1) * step
-
-    # -- encounters ----------------------------------------------------------
     def _on_director_event(self, event: str, value) -> None:
         if event == "drift_start":
             self.game.audio.set_bed_level(0.12)
@@ -432,7 +418,13 @@ class GameplayScene(Scene):
 
     # -- combat --------------------------------------------------------------
     def _collisions(self) -> None:
-        for hazard, bullets in pygame.sprite.groupcollide(self.hazards, self.player_bullets, False, False).items():
+        hazard_hits: dict = {}
+        for group in (self.player_bullets, self.echo_bullets):  # echoes' rounds hit wrecks too
+            for hazard, bullets in pygame.sprite.groupcollide(self.hazards, group, False, False).items():
+                hazard_hits.setdefault(hazard, []).extend(bullets)
+        for hazard, bullets in hazard_hits.items():
+            if not hazard.alive():
+                continue
             if isinstance(hazard, Hulk):
                 for b in bullets:
                     b.kill()
@@ -527,9 +519,14 @@ class GameplayScene(Scene):
 
     def _player_damaged(self, result: str) -> None:
         center = self.player.rect.center
-        if result == "armour":
+        if result in ("armour", "armour_broken"):
             self.game.audio.play("player_hit")
             burst(self.particles, center, 6, (STEEL, ASH), 160, 0.3, 3, self.rng)
+            outcome = self.player.last_outcome
+            if result == "armour_broken" and outcome is not None and outcome.slot is not None:
+                ox, oy = SLOT_OFFSETS[outcome.slot]
+                salvage_ops.shrapnel(self, (self.player.x + ox, self.player.y + oy))
+                self.game.audio.play("knock")
         elif result == "knocked":
             outcome = self.player.last_outcome
             self.game.audio.play("knock")
@@ -619,6 +616,7 @@ class GameplayScene(Scene):
             if isinstance(hazard, Hulk):
                 canvas.blit(hazard.image, hazard.rect)
         self.drops.draw(canvas)
+        self._draw_tractor(canvas)
         self.enemies.draw(canvas)
         if self.blackout_timer > 0:
             veil = pygame.Surface((WIDTH, HEIGHT))
@@ -641,6 +639,19 @@ class GameplayScene(Scene):
         draw_hud(canvas, self)
         surface.fill((0, 0, 0))
         surface.blit(canvas, self.shake.offset)
+
+    def _draw_tractor(self, canvas: pygame.Surface) -> None:
+        """The tractor's beam to the drop it is reeling in, and its faint drag field."""
+        if not self.player.alive_in_world or not self.player.loadout.count("tractor"):
+            return
+        pos = (round(self.player.x), round(self.player.y))
+        pygame.draw.circle(canvas, STEEL_DIM, pos, int(salvage_ops.DRAG_RADIUS), 1)
+        if self.tractor_target is not None:
+            slot = next(s for s, p in self.player.loadout.parts() if p.kind == "tractor")
+            ox, oy = SLOT_OFFSETS[slot]
+            start = (self.player.x + ox, self.player.y + oy)
+            flicker = STEEL if int(self.time * 20) % 2 else BONE
+            pygame.draw.line(canvas, flicker, start, self.tractor_target, 2)
 
     def _draw_banners(self, canvas: pygame.Surface) -> None:
         if self.banner_timer > 0 and self.banner_text:

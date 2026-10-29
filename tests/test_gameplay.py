@@ -530,3 +530,79 @@ def test_scrapper_drops_are_scarred(game):
         scene._drop((400, 200), force=True)
         codes += [d.code for d in scene.drops if d.code != "patch"]
     assert codes and all(code.endswith("*") for code in codes)
+
+
+def test_tractor_range_360_pulls_distant_drop(game):
+    scene = start_at(game, 0)
+    scene.player.loadout.attach(Part("tractor"), (-16, 30))
+    drop = Drop("armour", (scene.player.x + 300, scene.player.y - 40), vel=(0, 0))
+    scene.drops.add(drop)
+    start = (drop.x, drop.y)
+    target = salvage_ops.tractor(scene, 1 / 60)
+    assert target == start and (drop.x, drop.y) != start  # beam locked on, drop moving
+    run_frames(game, 120)
+    assert scene.player.loadout.count("armour") == 1
+
+
+def test_tractor_ignores_drops_beyond_range(game):
+    scene = start_at(game, 0)
+    scene.player.loadout.attach(Part("tractor"), (-16, 30))
+    drop = Drop("armour", (scene.player.x - 390, 120), vel=(0, 0))
+    scene.drops.add(drop)
+    assert salvage_ops.tractor(scene, 1 / 60) is None
+
+
+def test_gravity_well_pulls_from_anywhere(game):
+    scene = start_at(game, 0)
+    scene.player.loadout.attach(Part("tractor"), (-16, 30))
+    scene.player.loadout.attach(Part("tractor"), (16, 30))
+    drop = Drop("armour", (20, 80), vel=(0, 0))
+    scene.drops.add(drop)
+    assert salvage_ops.tractor(scene, 1 / 60) is not None
+
+
+def test_drag_field_slows_near_bullets_only(game):
+    scene = start_at(game, 0)
+    near = EnemyBullet((scene.player.x, scene.player.y - 100), (0, 0))
+    far = EnemyBullet((scene.player.x, scene.player.y - 300), (0, 0))
+    scene.enemy_bullets.add(near, far)
+    salvage_ops.drag_field(scene)
+    assert near.speed_scale == far.speed_scale == 1.0  # no tractor, no field
+    scene.player.loadout.attach(Part("tractor"), (-16, 30))
+    salvage_ops.drag_field(scene)
+    assert near.speed_scale == pytest.approx(0.6) and far.speed_scale == 1.0
+
+
+def test_armour_break_spawns_shrapnel(game):
+    scene = start_at(game, 0)
+    scene.enemies.empty()
+    scene.player.loadout.attach(Part("armour"), (30, 2))
+    scene.player.loadout.slots["wing_r"].armour_left = 1
+    before = len(scene.player_bullets)
+    scene.enemy_bullets.add(EnemyBullet((scene.player.x, scene.player.y), (0, 0)))
+    run_frames(game, 1)
+    assert scene.player.loadout.count("armour") == 0
+    assert len(scene.player_bullets) - before >= 10
+
+
+def test_shrapnel_never_hurts_player_or_echoes(game):
+    game.save.echoes = [seeded_trace(4, x=420.0).to_data()]
+    scene = start_at(game, 0)
+    scene.enemies.empty()
+    run_frames(game, 2)
+    echo = scene.live_echoes()[0]
+    salvage_ops.shrapnel(scene, (scene.player.x, scene.player.y))
+    salvage_ops.shrapnel(scene, (echo.x, echo.y))
+    run_frames(game, 30)
+    assert scene.player.health == PLAYER_MAX_HEALTH and echo.hp == 6
+
+
+def test_echo_bullets_hit_hulks(game):
+    scene = GameplayScene(game, seed=1)
+    game.scenes.push(scene)
+    hulk = Hulk((400, 300))
+    scene.hazards.add(hulk)
+    shot = PlayerBullet((400, 340), (0, -600), 1)
+    scene.echo_bullets.add(shot)
+    run_frames(game, 20)
+    assert hulk.hp < 8 and not shot.alive()

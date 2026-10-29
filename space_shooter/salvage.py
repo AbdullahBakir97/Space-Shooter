@@ -77,7 +77,7 @@ def part_from_code(code: str) -> Part | None:
 
 @dataclass
 class HitOutcome:
-    kind: str  # "armour" | "knocked" | "hull"
+    kind: str  # "armour" | "armour_broken" | "knocked" | "hull"
     slot: str | None = None
     part: Part | None = None
 
@@ -127,6 +127,7 @@ class Loadout:
                 part.armour_left -= 1
                 if part.armour_left <= 0:
                     self._remove(slot)
+                    return HitOutcome("armour_broken", slot, part)
                 return HitOutcome("armour", slot, part)
         occupied = [s for s in SLOTS if self.slots[s] is not None]
         if occupied and rng.random() < KNOCK_CHANCE:

@@ -39,12 +39,13 @@ class Bullet(pygame.sprite.Sprite):
         self.x, self.y = float(pos[0]), float(pos[1])
         self.vx, self.vy = vel
         self.damage = damage
+        self.speed_scale = 1.0  # a tractor's drag field lowers this near the ship
         self.image = image
         self.rect = self.image.get_rect(center=(self.x, self.y))
 
     def update(self, dt: float, world=None) -> None:
-        self.x += self.vx * dt
-        self.y += self.vy * dt
+        self.x += self.vx * self.speed_scale * dt
+        self.y += self.vy * self.speed_scale * dt
         self.rect.center = (round(self.x), round(self.y))
         if (
             self.rect.bottom < -MARGIN

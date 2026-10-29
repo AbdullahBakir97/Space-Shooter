@@ -79,7 +79,7 @@ class Player(pygame.sprite.Sprite):
         return gun_volley(self.x, self.rect.top, self.loadout, heavy=heavy)
 
     def take_damage(self, amount: int, rng: random.Random) -> str:
-        """Return 'ignored', 'armour', 'knocked', 'hit' or 'died'."""
+        """Return 'ignored', 'armour', 'armour_broken', 'knocked', 'hit' or 'died'."""
         if self.dead or self.invuln_timer > 0:
             return "ignored"
         outcome = self.loadout.absorb_hit(rng)

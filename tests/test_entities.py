@@ -242,3 +242,24 @@ def test_turret_barrel_is_drawn_toward_its_aim(display):
     draw_loadout(up, lo, (100, 100), aim={"wing_l": -math.pi / 2})
     draw_loadout(left, lo, (100, 100), aim={"wing_l": math.pi})
     assert pygame.image.tobytes(up, "RGB") != pygame.image.tobytes(left, "RGB")
+
+
+def test_bullet_speed_scale(display):
+    from space_shooter.entities.bullets import EnemyBullet
+
+    a, b = EnemyBullet((100, 100), (0, 100)), EnemyBullet((100, 100), (0, 100))
+    b.speed_scale = 0.6
+    a.update(1.0)
+    b.update(1.0)
+    assert a.y == pytest.approx(200) and b.y == pytest.approx(160)
+
+
+def test_armour_cracks_are_drawn(display):
+    whole, cracked = Loadout(), Loadout()
+    whole.attach(Part("armour"), (30, 2))
+    cracked.attach(Part("armour"), (30, 2))
+    cracked.slots["wing_r"].armour_left = 1
+    a, b = pygame.Surface((200, 200)), pygame.Surface((200, 200))
+    draw_loadout(a, whole, (100, 100))
+    draw_loadout(b, cracked, (100, 100))
+    assert pygame.image.tobytes(a, "RGB") != pygame.image.tobytes(b, "RGB")

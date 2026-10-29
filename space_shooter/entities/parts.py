@@ -153,6 +153,13 @@ def draw_loadout(
         img = procgen.part_sprite(part.kind, part.rare)
         if part.kind == "turret" and aim and slot in aim:
             img = pygame.transform.rotate(img, -math.degrees(aim[slot]) - 90)
+        cracks = loadout.armour_hits() - part.armour_left if part.kind == "armour" else 0
+        if cracks > 0:
+            img = img.copy()
+            w, h = img.get_size()
+            pygame.draw.line(img, (20, 16, 14), (2, 3), (w - 6, h - 2), 2)
+            if cracks > 1:
+                pygame.draw.line(img, (20, 16, 14), (w - 3, 2), (4, h - 5), 2)
         if alpha < 255:
             img = img.copy()
             img.set_alpha(alpha)

@@ -55,7 +55,7 @@ def test_armour_absorbs_before_knock():
     lo.attach(Part("armour"), (0, 0))
     lo.attach(Part("turret"), (-30, 2))
     rng = random.Random(0)
-    assert [lo.absorb_hit(rng).kind for _ in range(2)] == ["armour", "armour"]
+    assert [lo.absorb_hit(rng).kind for _ in range(2)] == ["armour", "armour_broken"]
     assert lo.count("armour") == 0  # plate destroyed after 2 hits
 
 
