@@ -57,10 +57,15 @@ class FlightScene(Scene):
 
     def _start_fight(self, node_id: str | None) -> None:
         from space_shooter.scenes.gameplay import GameplayScene
+        from space_shooter.scenes.ground import GroundScene
 
         state = self.run.state
         encounter = AMBUSH if node_id is None else campaign.encounter_for(self.system, state, node_id)
         self.fight_node = node_id
+        if node_id is not None and self.system.nodes[node_id].ground:  # planets are taken on foot
+            self.fight = GroundScene(self.game, self.run, node_id, encounter, seed=self.run.rng.randrange(1 << 30))
+            self.game.scenes.push(self.fight)
+            return
         self.fight = GameplayScene(
             self.game, seed=self.run.rng.randrange(1 << 30), run=self.run, node_id=node_id, encounter=encounter
         )
@@ -172,8 +177,6 @@ class FlightScene(Scene):
             return True
         if campaign.locked(self.system, state, best.id):
             self.prompt = "SEALED"
-        elif best.ground and state.owner[best.id] == "player":
-            self.prompt = "LAND - ground forces not ready"
         if flight.repairable(self.system, state, best.id, run.repaired):
             run.repaired.add(best.id)
             run.player.health = min(PLAYER_MAX_HEALTH, run.player.health + flight.REPAIR)

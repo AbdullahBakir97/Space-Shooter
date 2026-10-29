@@ -172,7 +172,7 @@ class Game:
         from space_shooter.scenes.gameplay import GameplayScene
 
         for scene in reversed(self.scenes.stack):  # the fight on top banks its salvage before flight closes
-            if isinstance(scene, GameplayScene):
+            if isinstance(scene, GameplayScene) or hasattr(scene, "end_loop"):  # a fight, in space or on foot
                 scene.end_loop(victory=False)
             elif getattr(scene, "run", None) is not None:  # flying the star system between fights
                 scene.run.finish(died=True)
