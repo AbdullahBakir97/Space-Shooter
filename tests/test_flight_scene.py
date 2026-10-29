@@ -192,3 +192,62 @@ def test_flight_draws_every_state(game, monkeypatch):
     place(scene, "m1", dx=60)
     run_frames(game, 2)
     assert scene.patrols
+
+
+def test_headless_campaign_autopilot(game, monkeypatch):
+    """Five loops through the real screens: undock, fly to a fight, win it, then dock or die."""
+    from space_shooter import campaign
+    from tests.test_campaign_play import die
+
+    game.save.read_logs.append("a1_open")
+    game.scenes.clear_to(HangarScene(game))
+    start = dict(game.campaign().owner)
+    target = {"pos": (0.0, 0.0)}
+
+    def steer():
+        scene = game.scenes.stack[0]
+        if not isinstance(scene, FlightScene):
+            return (0.0, 0.0)
+        dx, dy = target["pos"][0] - scene.tug.x, target["pos"][1] - scene.tug.y
+        dist = math.hypot(dx, dy) or 1.0
+        return (dx / dist, dy / dist)
+
+    monkeypatch.setattr(game, "move_vector", steer)
+    for turn in range(5):
+        select(game, "LAUNCH")
+        scene = game.scenes.top
+        assert isinstance(scene, FlightScene)
+        state = scene.run.state
+        goal = min(
+            (n for n in game.system.nodes if campaign.can_engage(game.system, state, n)),
+            key=lambda n: (math.dist(flight.world_pos(game.system.nodes[n]), scene.tug_pos), n),
+        )
+        target["pos"] = flight.world_pos(game.system.nodes[goal])
+        for _ in range(60 * 30):
+            top = game.scenes.top
+            if isinstance(top, GameplayScene):
+                if top.node_id == goal and turn % 2:
+                    die(game, top)
+                    break
+                clear_current(game, top)
+                if top.node_id == goal:
+                    target["pos"] = flight.world_pos(game.system.nodes["home"])
+            elif isinstance(top, LoopEndScene):
+                break
+            elif top is scene and math.dist(scene.tug_pos, target["pos"]) < flight.DOCK_RADIUS / 2:
+                if state.owner[goal] == "player":
+                    press(game, "confirm")  # docked at home
+                    break
+            run_frames(game, 1)
+        for _ in range(20):  # the death beat plays before the card
+            if isinstance(game.scenes.top, LoopEndScene):
+                break
+            run_frames(game, 30)
+        card = game.scenes.top
+        assert isinstance(card, LoopEndScene), f"turn {turn}: {card}"
+        card.time = 10
+        while not isinstance(game.scenes.top, HangarScene):
+            press(game, "confirm")
+    state = game.campaign()
+    assert state.turn == 5 and state.owner != start
+    assert sum(1 for o in state.owner.values() if o == "player") >= 2

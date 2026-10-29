@@ -18,7 +18,9 @@ beside you as an echo.
 runs fly with you as translucent ghosts. They follow the path you flew, fire
 when you fired, and carry the parts you had. They deal 60% of your damage and
 take six hits. An echo destroyed in combat is gone from your save for good.
-The ones that reached furthest fly first, so protecting them matters.
+The ones that reached furthest fly first, so protecting them matters. In the
+war, echoes follow the kind of fight: the runs that fought a Graveyard-type
+location join every Graveyard-type fight.
 
 **Salvage.** Your tug has six hardpoints: two fore, two on the wings, two aft.
 Destroyed enemies drop parts. Fly into one and it bolts onto the nearest free
@@ -49,34 +51,48 @@ When the hull takes a hit, there is a 35% chance a part is knocked off
 instead. It drifts away for six seconds and you can fly back for it.
 Scarred parts, marked in ember, are 1.5 times as strong.
 
-**The war.** Each loop is one turn of a war for the star system. LAUNCH
-opens the map: fourteen locations on three rings, linked by lanes. Plan a
-route of up to three stops, starting next to ground you hold, and fly it.
-Each stop plays as one of the encounters below. Every stop you fully clear
-becomes yours, even if you die further on, and clearing the whole route ends
-the loop.
+**The war.** Each loop is one turn of a war for the star system, and you fly
+it. LAUNCH undocks the tug from Anchor Station into a system three screens
+wide: fourteen locations on three rings, linked by lanes. Fly into any
+location that isn't yours and its fight begins. Each one plays as one of the
+encounters below. Win and the ground is yours at once; you come back to space
+with the hull and parts you finished the fight with, and you can fly on to
+the next one or turn for home.
 
+- **Lanes** are the safe roads: the tug flies 60% faster on them and patrols
+  see you at half the range. Open space is slower, and ash wears a point of
+  hull every four seconds.
 - **The swarm** spreads after every loop, faster as the war drags on. It takes
   empty space first and turns on your ground when nothing is left. Its ground
   fights back harder (+25% enemy hull). Ground it holds for three turns
   becomes a hive (+50% hull and a faster script), and hives spread it further.
-- **Salvage** from each run, plus a yield from every location you hold, goes
-  into a war chest. Spend it in the SHIPYARD on up to two parts fitted at your
-  next launch (800 each), or fortify a held location from the map (1000) so it
-  survives one attack.
-- **Winning:** hold all five middle worlds to open SHELF GATE, take it, and kill
-  the Warden at WARDEN CORE.
+- **Patrols** drift along the lanes out of swarm ground. One that spots you
+  gives chase; outfly it and it loses interest after four seconds. If it
+  catches you, you fight a short ambush for salvage but no ground.
+- **Ending a loop:** dock at home (Enter inside the ring) to bank everything
+  you carry. If you die, you keep every location you won but lose half the
+  salvage you were carrying. Held stations patch 25 hull once a loop as you
+  fly through them.
+- **Salvage** from each loop, plus a yield from every location you hold, goes
+  into a war chest. Spend it in the SHIPYARD on up to two parts fitted when
+  you undock (800 each), or fortify a held location from the CHART (1000) so
+  it survives one attack.
+- **Winning:** hold all five middle worlds to unseal SHELF GATE, take it, and
+  kill the Warden at WARDEN CORE.
 - **Losing:** ANCHOR STATION, your home, is the last stand. If the swarm takes
   it, the war is lost and a fresh one starts. Your echoes, records and story
   carry over.
 
-| Map key | Meaning |
-| --- | --- |
-| Arrows / click | Select a location |
-| Enter | Add it to the route, or remove it and the stops after it |
-| F | Fortify the selected location |
-| L | Launch the route |
-| Esc | Back to the hangar |
+The planets (KESS, HALE, MERE) are where ground combat will land next; for
+now they fight like any other location.
+
+| In flight | Keyboard | Gamepad |
+| --- | --- | --- |
+| Fly | Arrow keys / WASD | Left stick / D-pad |
+| Dash (needs a thruster) | X / Shift | X |
+| Dock at home | Enter | A |
+| System chart | Tab | |
+| Pause | Esc / P | Start |
 
 **The encounters.** Act 1 has five encounters and a boss, each reached
 through a quiet drift where the radio sometimes speaks.
@@ -130,8 +146,9 @@ Requires Python 3.11 or newer. `pip install -e .` also installs a
 | Fullscreen | F11 | |
 
 Pausing lets you abandon a loop. Abandoning, dying and closing the window
-mid-run all end the loop the same way: the run is kept as an echo and the
-loop counter advances.
+mid-run, in flight or in a fight, all end the loop the same way: the run is
+kept as an echo, half the carried salvage is lost, and the loop counter
+advances.
 
 ## Settings
 
@@ -167,7 +184,8 @@ space_shooter/
   salvage.py                 hardpoints, parts, pair bonuses, knock-off and drop rules
   dash.py                    thruster dash charges and recharge
   encounters.py              Act 1 encounters as data and their director
-  campaign.py                the war: star system, routes, swarm spread, hives, war chest
+  campaign.py                the war: star system, claims, swarm spread, hives, war chest
+  flight.py                  flying the system: lanes, drift, ash wear, patrols, repairs
   data/system.json           the fourteen locations and their lanes
   echoes.py                  recording, playback, roster rules, cluster targeting
   story.py                   radio-log conditions and selection
@@ -178,14 +196,16 @@ space_shooter/
   hud.py / ui.py             cockpit readout and menu widgets
   entities/                  tug, bullets, parts and drops, enemies, the Warden, hazards, echoes
   scenes/salvage_ops.py      claw, tractor, drag field and shrapnel behaviour
-  scenes/                    hangar, war map, shipyard, gameplay, log panel, archive, records, settings, pause, loop-end card
+  scenes/run.py              one flown loop: the tug and its cargo across fights, closed once
+  scenes/                    hangar, flight, system chart, shipyard, gameplay, log panel,
+                             archive, records, settings, pause, loop-end card
 tests/                       headless pytest suite
 images/                      12x16 source sprites
 sounds/                      Juhani Junkala's retro SFX collection (CC0)
 docs/design/            design specs and implementation plans
 ```
 
-The rule modules (`save`, `salvage`, `dash`, `campaign`, `encounters`, `echoes`, `story`) do not
+The rule modules (`save`, `salvage`, `dash`, `campaign`, `flight`, `encounters`, `echoes`, `story`) do not
 import pygame, so they are tested directly without a window.
 
 ## Development
@@ -196,7 +216,7 @@ ruff check . && ruff format --check .
 pytest
 ```
 
-The suite (325 tests) runs with SDL's dummy video and audio drivers, so it
+The suite (356 tests) runs with SDL's dummy video and audio drivers, so it
 passes on CI runners and headless machines. CI runs lint, format and tests on
 Python 3.11 to 3.13.
 
@@ -204,8 +224,8 @@ Python 3.11 to 3.13.
 
 Act 1 is the first milestone of a larger campaign:
 
-1. **Strategy map** (done): a star system where the swarm spreads each turn
-   and you choose where to fight.
+1. **Strategy map** (done): a star system you fly through, where the swarm
+   spreads each turn and you choose where to fight.
 2. **Ground combat**: top-down drops onto planets with a small squad you
    command.
 3. **The Hive**: a swarm that evolves against how you play, and its queen.

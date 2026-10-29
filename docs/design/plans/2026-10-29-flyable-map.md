@@ -251,4 +251,13 @@
 
 ## Results
 
-(Filled in by Task 5.)
+- **Tests:** 356 pass headlessly, and lint and format are clean. They include a five-loop headless autopilot through the real screens (undock, fly to a fight, win it, then dock or die).
+- **Balance:** a campaign-level simulation, with free choice of targets, 300 seeds per row. Each fight after the first in a loop is made harder by a factor (0.85 or 0.75) to stand in for the hull and parts carried between fights.
+
+  | Player | Fights per loop | Win rate | Median loops to win | Median loops to lose |
+  | --- | --- | --- | --- | --- |
+  | Strong (skill 1.0) | 3 | 59 to 66% | 5 | 8 |
+  | Average (skill 0.9) | 3 | 41 to 50% | 5 | 8 |
+  | Weak (skill 0.75) | 2 | 14 to 16% | 6 | 8 |
+
+  A strong player neither wins in under 5 loops nor loses in under 6, so the rules were not retuned. Without any fatigue (an upper bound), a strong player wins in a median of 4 loops.
