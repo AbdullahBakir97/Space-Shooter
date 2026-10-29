@@ -100,13 +100,13 @@ def test_time_cap_emits_retreat():
     assert ("retreat", 0) in d.drain_events()
 
 
-def test_completing_warden_emits_act_complete():
+def test_completing_warden_emits_run_complete():
     d = EncounterDirector(random.Random(0))
     d.index = WARDEN_INDEX
     d.update(DRIFT_TIME + 0.01, 0)
     d.update(0.1, 1)
     d.update(0.1, 0)
-    assert ("act_complete", None) in d.drain_events() and d.state == "complete"
+    assert ("run_complete", None) in d.drain_events() and d.state == "complete"
     assert d.update(1.0, 0) == []
 
 
@@ -119,3 +119,30 @@ def test_moment_fires_once():
         d.update(0.1, 3)
         events += d.drain_events()
     assert events.count(("moment", "blackout")) == 1
+
+
+def clear_all(d, limit=4000):
+    for _ in range(limit):
+        d.update(0.1, 0)
+        if d.state == "complete":
+            return
+
+
+def test_director_completes_short_route():
+    d = EncounterDirector(random.Random(0), encounters=(ENCOUNTERS[0], ENCOUNTERS[1]))
+    clear_all(d)
+    events = d.drain_events()
+    assert d.state == "complete" and ("run_complete", None) in events
+    assert [v for e, v in events if e == "encounter_start"] == [0, 1]
+
+
+def test_director_counts_cleared():
+    d = EncounterDirector(random.Random(0), encounters=(ENCOUNTERS[0], ENCOUNTERS[1]))
+    assert d.cleared == 0
+    for _ in range(4000):
+        d.update(0.1, 0)
+        if d.index == 1:
+            break
+    assert d.cleared == 1
+    clear_all(d)
+    assert d.cleared == 2

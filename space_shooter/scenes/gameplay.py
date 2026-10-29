@@ -411,7 +411,10 @@ class GameplayScene(Scene):
         # have not been placed yet this frame (the Warden spawns on the encounter's very first tick)
         live = sum(1 for e in self.echoes if e.alive() and e.playback.has_encounter(self.director.index))
         kwargs = dict(
-            hp_mult=self.difficulty.enemy_hp * self.hull_mult * (1 + ECHO_PRESSURE_HULL * live),
+            hp_mult=self.difficulty.enemy_hp
+            * self.hull_mult
+            * self.director.encounter.hull
+            * (1 + ECHO_PRESSURE_HULL * live),
             speed_mult=self.difficulty.enemy_speed,
             fire_mult=self.difficulty.enemy_fire_rate * (1 + ECHO_PRESSURE_FIRE * live),
             armed=not (spawn.kind == "drone" and self.director.index == 0),
@@ -689,7 +692,7 @@ class GameplayScene(Scene):
             fade = min(1.0, self.banner_timer / 0.8)
             colour = tuple(int(c * fade) for c in BONE)
             draw_text(canvas, self.banner_text, 54, (WIDTH // 2, HEIGHT // 2 - 40), colour)
-            if self.director.index == WARDEN_INDEX:
+            if self.director.encounter.index == WARDEN_INDEX:
                 draw_text(canvas, "SOMETHING LARGE IS WAKING", 26, (WIDTH // 2, HEIGHT // 2 + 10), EMBER)
         for i, (text, t) in enumerate(reversed(self.radio_lines[-3:])):
             fade = min(1.0, t / 0.6)

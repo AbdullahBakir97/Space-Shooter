@@ -17,7 +17,7 @@ from space_shooter.paths import user_data_dir
 
 SAVE_FILE = "save.json"
 LEGACY_SCORES = "high_scores.json"
-SAVE_VERSION = 1
+SAVE_VERSION = 2  # 2 added the campaign; version 1 saves load with campaign = None
 MAX_RECORDS = 10
 RESET_NOTICE = "Save data was unreadable and has been reset. A backup was kept."
 DAMAGED_NOTICE = "Some damaged echo recordings or records were removed from the save."
@@ -54,6 +54,7 @@ class SaveData:
     read_logs: list[str] = field(default_factory=list)
     records: list[Record] = field(default_factory=list)
     act1_complete: bool = False
+    campaign: dict | None = None
     notice: str | None = None  # shown once in the hangar; never persisted
 
 
@@ -118,6 +119,7 @@ def _from_dict(raw: dict) -> SaveData:
         read_logs=list(raw.get("read_logs", [])),
         records=[r for r in records if r is not None],
         act1_complete=bool(raw.get("act1_complete", False)),
+        campaign=raw.get("campaign") if isinstance(raw.get("campaign"), dict) else None,
     )
     if None in echoes or None in records:
         data.notice = DAMAGED_NOTICE
@@ -158,6 +160,7 @@ def write_save(data: SaveData, directory: Path | None = None) -> bool:
     payload = asdict(data)
     payload.pop("notice", None)
     payload["flags"] = sorted(data.flags)
+    payload["version"] = SAVE_VERSION
     try:
         directory = directory or user_data_dir()
         directory.mkdir(parents=True, exist_ok=True)
