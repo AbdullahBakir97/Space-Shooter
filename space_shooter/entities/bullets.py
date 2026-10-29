@@ -82,3 +82,13 @@ class SlugBullet(Bullet):
         super().__init__(pos, vel, _slug_image(), damage)
         self.pierce = pierce
         self.hit_ids: set[int] = set()
+
+
+class HeavySlug(SlugBullet):
+    """Every few trigger pulls: a round that tears through everything in its line."""
+
+    def __init__(self, pos, vel, damage: int = 4) -> None:
+        super().__init__(pos, vel, damage=damage, pierce=10**6)
+        self.shove = 28
+        self.image = pygame.transform.scale_by(self.image, 1.5)
+        self.rect = self.image.get_rect(center=self.rect.center)

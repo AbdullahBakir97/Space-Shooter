@@ -15,6 +15,7 @@ from space_shooter.entities.parts import Drop
 from space_shooter.game import Game
 from space_shooter.salvage import PATCH_HULL, SLOT_OFFSETS, Part
 from space_shooter.save import load_save
+from space_shooter.scenes import salvage_ops
 from space_shooter.scenes.gameplay import ECHO_RAM_DAMAGE, GameplayScene
 from space_shooter.scenes.log_panel import LogPanel
 from space_shooter.settings_store import Settings
@@ -456,3 +457,76 @@ def test_difficulty_table():
     rows = {k: (d.enemy_speed, d.enemy_hp, d.enemy_fire_rate, d.score_mult) for k, d in DIFFICULTIES.items()}
     assert rows == {"easy": (1.0, 1.0, 1.0, 0.8), "normal": (1.25, 1.4, 1.5, 1.0), "hard": (1.4, 1.8, 2.0, 1.5)}
     assert ENEMY_BULLET_SPEED == 290.0
+
+
+def column_of_gunners(scene, x, ys, hp=1):
+    out = []
+    for y in ys:
+        g = ENEMY_CLASSES["gunner"](x)
+        g.y, g.hp, g.line_y, g.speed = y, hp, 10**6, 0.0  # parked: only the test moves it
+        g.rect.center = (round(g.x), round(g.y))
+        scene.enemies.add(g)
+        out.append(g)
+    return out
+
+
+def test_heavy_slug_pierces_line_and_shoves(game):
+    from space_shooter.entities.bullets import HeavySlug
+
+    scene = start_at(game, 3)
+    scene.enemies.empty()
+    a, b, c = column_of_gunners(scene, 300.0, (400, 300, 200), hp=50)
+    scene.player_bullets.add(HeavySlug((300, 470), (0, -520)))
+    run_frames(game, 40)
+    assert a.hp == b.hp == c.hp == 46
+    assert a.y == pytest.approx(400 - 28)  # shoved back once
+
+
+def test_heavy_kill_counted_once(game):
+    from space_shooter.entities.bullets import HeavySlug
+
+    scene = start_at(game, 3)
+    scene.enemies.empty()
+    kills = scene.kills
+    column_of_gunners(scene, 300.0, (400, 380), hp=1)
+    scene.player_bullets.add(HeavySlug((300, 470), (0, -520)))
+    run_frames(game, 30)
+    assert scene.kills - kills == 2
+
+
+def test_claw_tears_and_forces_drop(game):
+    scene = start_at(game, 0)
+    scene.enemies.empty()
+    scene.player.loadout.attach(Part("claw"), (-14, -30))
+    scene.rng = random.Random(5)
+    ox, oy = SLOT_OFFSETS["fore_l"]
+    (victim,) = column_of_gunners(scene, scene.player.x + ox, (scene.player.y + oy,), hp=2)
+    scene.drops.empty()
+    salvage_ops.claw_contacts(scene, 1 / 60)
+    assert not victim.alive() and len(scene.drops) == 1
+
+
+def test_claw_cooldown_per_enemy(game):
+    scene = start_at(game, 0)
+    scene.enemies.empty()
+    scene.player.loadout.attach(Part("claw"), (-14, -30))
+    ox, oy = SLOT_OFFSETS["fore_l"]
+    (victim,) = column_of_gunners(scene, scene.player.x + ox, (scene.player.y + oy,), hp=10)
+    salvage_ops.claw_contacts(scene, 1 / 60)
+    salvage_ops.claw_contacts(scene, 0.1)
+    assert victim.hp == 8
+    salvage_ops.claw_contacts(scene, 0.25)
+    assert victim.hp == 6
+
+
+def test_scrapper_drops_are_scarred(game):
+    scene = start_at(game, 1)
+    lo = scene.player.loadout
+    lo.attach(Part("claw"), (-14, -30))
+    lo.attach(Part("claw"), (14, -30))
+    codes = []
+    for _ in range(60):
+        scene.drops.empty()
+        scene._drop((400, 200), force=True)
+        codes += [d.code for d in scene.drops if d.code != "patch"]
+    assert codes and all(code.endswith("*") for code in codes)

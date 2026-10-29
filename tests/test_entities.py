@@ -1,10 +1,11 @@
+import math
 import random
 
 import pygame
 import pytest
 
 from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
-from space_shooter.entities.bullets import SlugBullet
+from space_shooter.entities.bullets import HeavySlug, SlugBullet
 from space_shooter.entities.enemies import ENEMY_CLASSES, Diver, Drone, Gunner
 from space_shooter.entities.parts import Drop, PartRig, draw_loadout
 from space_shooter.entities.player import PLAY_TOP, Player
@@ -116,12 +117,67 @@ class TestParts:
         assert len(shots) == 1 and shots[0].vy < 0
         assert rig.update(0.1, lo, (300, 500), [near], 1.0) == []
 
-    def test_rig_ignores_enemies_out_of_range(self):
+    def test_turret_reaches_top_of_screen(self):
         lo = Loadout()
         lo.attach(Part("turret"), (-30, 2))
         e = Drone(300.0)
-        e.x, e.y = 300, 0
-        assert PartRig().update(1.0, lo, (300, 600), [e], 1.0) == []
+        e.x, e.y = 300, 40
+        shots = PartRig().update(1.0, lo, (300, 600), [e], 1.0)
+        assert len(shots) == 1 and shots[0].vy < 0
+
+    def test_turret_targets_nearest_to_ship_and_swivels(self):
+        lo = Loadout()
+        lo.attach(Part("turret"), (-30, 2))
+        near, far = Drone(100.0), Drone(500.0)
+        near.x, near.y, far.x, far.y = 100, 400, 500, 100
+        rig = PartRig()
+        shot = rig.update(1.0, lo, (300, 560), [far, near], 1.0)[0]
+        assert shot.vx < 0  # toward the nearer enemy on the left
+        assert rig.aim["wing_l"] == pytest.approx(math.atan2(400 - 562, 100 - 270))
+
+    def test_scarred_turret_bursts(self):
+        lo = Loadout()
+        lo.attach(Part("turret", rare=True), (-30, 2))
+        e = Drone(300.0)
+        e.x, e.y = 300, 200
+        rig = PartRig()
+        first = rig.update(0.01, lo, (300, 560), [e], 1.0)
+        second = rig.update(0.09, lo, (300, 560), [e], 1.0)
+        assert len(first) == 1 and len(second) == 1
+
+    def test_twin_turrets_fire_together(self):
+        lo = Loadout()
+        lo.attach(Part("turret"), (-30, 2))
+        lo.attach(Part("turret"), (30, 2))
+        e = Drone(300.0)
+        e.x, e.y = 300, 200
+        rig = PartRig()
+        assert len(rig.update(0.01, lo, (300, 560), [e], 1.0)) == 2
+        assert rig.update(0.30, lo, (300, 560), [e], 1.0) == []
+        assert len(rig.update(0.06, lo, (300, 560), [e], 1.0)) == 2  # 0.35 s period
+
+    def test_heavy_slug_every_fourth_pull(self):
+        p = Player()
+        p.loadout.attach(Part("slug"), (-14, -30))
+        kinds = []
+        for _ in range(8):
+            p.fire_cooldown = 0
+            kinds.append(any(isinstance(b, HeavySlug) for b in p.try_fire()))
+        assert kinds == [False, False, False, True, False, False, False, True]
+
+    def test_broadside_every_third(self):
+        p = Player()
+        p.loadout.attach(Part("slug"), (-14, -30))
+        p.loadout.attach(Part("slug"), (14, -30))
+        heavy = []
+        for _ in range(6):
+            p.fire_cooldown = 0
+            heavy.append(sum(isinstance(b, HeavySlug) for b in p.try_fire()))
+        assert heavy == [0, 0, 2, 0, 0, 2]
+
+    def test_heavy_slug_stats(self):
+        h = HeavySlug((0, 0), (0, -500))
+        assert h.damage == 4 and h.pierce >= 10**6 and h.shove == 28
 
     def test_draw_loadout_full(self, display):
         lo = Loadout()
@@ -177,3 +233,12 @@ def test_ash_cloud_is_dense_enough_to_hide_bullets(display):
 
     cloud = ash_cloud_sprite(0)
     assert cloud.get_at((100, 65)).a >= 140
+
+
+def test_turret_barrel_is_drawn_toward_its_aim(display):
+    lo = Loadout()
+    lo.attach(Part("turret"), (-30, 2))
+    up, left = pygame.Surface((200, 200)), pygame.Surface((200, 200))
+    draw_loadout(up, lo, (100, 100), aim={"wing_l": -math.pi / 2})
+    draw_loadout(left, lo, (100, 100), aim={"wing_l": math.pi})
+    assert pygame.image.tobytes(up, "RGB") != pygame.image.tobytes(left, "RGB")

@@ -21,7 +21,7 @@ from space_shooter.config import (
 from space_shooter.echoes import EchoRecorder, EchoTrace, select_roster, store_trace
 from space_shooter.effects import Explosion, Flash, FloatingText, Particle, ScreenShake, burst, smoke
 from space_shooter.encounters import WARDEN_INDEX, EncounterDirector, Spawn, loop_hull_multiplier
-from space_shooter.entities.bullets import EnemyBullet, SlugBullet
+from space_shooter.entities.bullets import EnemyBullet, HeavySlug, SlugBullet
 from space_shooter.entities.echo import Echo
 from space_shooter.entities.enemies import ENEMY_CLASSES, Enemy
 from space_shooter.entities.hazards import AshCloud, Debris, Hulk
@@ -31,6 +31,7 @@ from space_shooter.hud import draw_hud
 from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL
 from space_shooter.salvage import DROP_BASE, PART_TYPES, PATCH_HULL, SLOT_OFFSETS, SLOTS, part_from_code, roll_drop
 from space_shooter.save import Record, add_record
+from space_shooter.scenes import salvage_ops
 from space_shooter.scenes.base import Scene
 from space_shooter.scenes.log_panel import LogPanel
 from space_shooter.scenes.loop_end import RunResult
@@ -64,6 +65,7 @@ class GameplayScene(Scene):
         self.difficulty = DIFFICULTIES[game.settings.difficulty]
         self.player = Player()
         self.rig = PartRig()
+        self.player.turret_aim = self.rig.aim
         self.enemies: pygame.sprite.Group = pygame.sprite.Group()
         self.player_bullets: pygame.sprite.Group = pygame.sprite.Group()
         self.enemy_bullets: pygame.sprite.Group = pygame.sprite.Group()
@@ -186,6 +188,8 @@ class GameplayScene(Scene):
             self.player_bullets.add(self.rig.update(dt, self.player.loadout, self.player_pos, self.enemies, 1.0))
             self._tractor(dt)
         self._exhaust(dt)
+        if self.player.alive_in_world:
+            salvage_ops.claw_contacts(self, dt)
 
         for spawn in self.director.update(dt, len(self.enemies)):
             self._spawn(spawn)
@@ -454,6 +458,8 @@ class GameplayScene(Scene):
                     if id(enemy) in b.hit_ids:
                         continue
                     b.hit_ids.add(id(enemy))
+                    if isinstance(b, HeavySlug) and not enemy.is_boss:
+                        enemy.y -= b.shove
                     if len(b.hit_ids) > b.pierce:
                         b.kill()
                 else:
@@ -546,7 +552,7 @@ class GameplayScene(Scene):
             self.effects.add(Explosion(center, scale=6, frame_time=0.08))
             burst(self.particles, center, 40, (EMBER, RUST, ASH), 320, 0.9, 4, self.rng)
 
-    def _kill_enemy(self, enemy: Enemy, award: bool = True) -> None:
+    def _kill_enemy(self, enemy: Enemy, award: bool = True, force_drop: bool = False) -> None:
         enemy.kill()
         self.kills += 1
         center = enemy.rect.center
@@ -566,7 +572,7 @@ class GameplayScene(Scene):
             smoke(self.particles, center, 4, self.rng)
             self.shake.add(SHAKE_EXPLOSION)
             self.game.audio.play("explosion")
-            self._drop(center)
+            self._drop(center, force=force_drop)
         if award:
             self.score += int(enemy.score * self.difficulty.score_mult)
 
@@ -581,7 +587,7 @@ class GameplayScene(Scene):
             return
         if force and code == "patch":
             code = self.rng.choice(list(PART_TYPES))
-        if rare and code != "patch":
+        if (rare or loadout.drops_scarred()) and code != "patch":
             code += "*"
         self.drops.add(Drop(code, center))
 

@@ -90,4 +90,4 @@ class Echo(pygame.sprite.Sprite):
             img.set_alpha(ECHO_ALPHA)
         surface.blit(img, self.rect)
         if self.active:
-            draw_loadout(surface, self.loadout, self.rect.center, alpha=ECHO_ALPHA)
+            draw_loadout(surface, self.loadout, self.rect.center, alpha=ECHO_ALPHA, aim=self.rig.aim)

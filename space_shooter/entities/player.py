@@ -37,6 +37,8 @@ class Player(pygame.sprite.Sprite):
         self.dead = False
         self.invuln_timer = 0.0
         self.fire_cooldown = 0.0
+        self.trigger_count = 0
+        self.turret_aim: dict[str, float] = {}
         self.anim_time = 0.0
         self.tilt = 0.0
         self.last_outcome: HitOutcome | None = None
@@ -71,7 +73,10 @@ class Player(pygame.sprite.Sprite):
         if self.fire_cooldown > 0 or self.dead:
             return []
         self.fire_cooldown = WEAPON_COOLDOWN
-        return gun_volley(self.x, self.rect.top, self.loadout)
+        self.trigger_count += 1
+        every = self.loadout.heavy_every()
+        heavy = every is not None and self.trigger_count % every == 0
+        return gun_volley(self.x, self.rect.top, self.loadout, heavy=heavy)
 
     def take_damage(self, amount: int, rng: random.Random) -> str:
         """Return 'ignored', 'armour', 'knocked', 'hit' or 'died'."""
@@ -99,4 +104,4 @@ class Player(pygame.sprite.Sprite):
         if self.invuln_timer > 0 and int(self.anim_time * 16) % 2 == 0:
             return
         surface.blit(self.image, self.rect)
-        draw_loadout(surface, self.loadout, self.rect.center)
+        draw_loadout(surface, self.loadout, self.rect.center, aim=self.turret_aim)

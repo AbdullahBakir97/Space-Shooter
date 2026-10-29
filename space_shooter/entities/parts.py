@@ -8,15 +8,16 @@ import pygame
 
 from space_shooter import procgen
 from space_shooter.config import BULLET_SPEED, HEIGHT, PLAYER_BULLET_DAMAGE
-from space_shooter.entities.bullets import Bullet, PlayerBullet, SlugBullet
+from space_shooter.entities.bullets import Bullet, HeavySlug, PlayerBullet, SlugBullet
 from space_shooter.salvage import SLOT_OFFSETS, Loadout
 
 SLUG_SPEED = 520.0
 SLUG_DAMAGE = 3
 SLUG_DAMAGE_RARE = 5
-TURRET_RANGE = 260.0
-TURRET_PERIOD = 0.5
-TURRET_PERIOD_RARE = 0.33
+HEAVY_DAMAGE = 4
+HEAVY_DAMAGE_RARE = 6
+TURRET_RANGE = 900.0
+BURST_GAP = 0.08
 BLINK_TIME = 2.0
 
 
@@ -25,14 +26,23 @@ def scaled(damage: int, mult: float) -> int:
     return max(1, math.ceil(damage * mult - 1e-9))
 
 
-def gun_volley(x: float, top: float, loadout: Loadout, damage_mult: float = 1.0) -> list[Bullet]:
-    """One trigger pull: the fixed main gun plus every slug cannon on the hull."""
-    bullets: list[Bullet] = [PlayerBullet((x, top + 6), (0, -BULLET_SPEED), scaled(PLAYER_BULLET_DAMAGE, damage_mult))]
+def gun_volley(x: float, top: float, loadout: Loadout, damage_mult: float = 1.0, heavy: bool = False) -> list[Bullet]:
+    """One trigger pull: the fixed main gun plus every slug cannon on the hull.
+
+    ``heavy`` swaps each slug round for a HeavySlug that pierces its whole line.
+    """
+    main = PlayerBullet((x, top + 6), (0, -BULLET_SPEED), scaled(PLAYER_BULLET_DAMAGE, damage_mult))
+    bullets: list[Bullet] = [main]
     for slot, part in loadout.parts():
         if part.kind == "slug":
             side = -1 if slot.endswith("_l") else 1
-            damage = scaled(SLUG_DAMAGE_RARE if part.rare else SLUG_DAMAGE, damage_mult)
-            bullets.append(SlugBullet((x + side * 14, top), (0, -SLUG_SPEED), damage))
+            pos, vel = (x + side * 14, top), (0, -SLUG_SPEED)
+            if heavy:
+                damage = scaled(HEAVY_DAMAGE_RARE if part.rare else HEAVY_DAMAGE, damage_mult)
+                bullets.append(HeavySlug(pos, vel, damage))
+            else:
+                damage = scaled(SLUG_DAMAGE_RARE if part.rare else SLUG_DAMAGE, damage_mult)
+                bullets.append(SlugBullet(pos, vel, damage))
     return bullets
 
 
@@ -86,43 +96,63 @@ class Drop(pygame.sprite.Sprite):
 
 
 class PartRig:
-    """Runs autonomous part behaviour (turrets) for one ship."""
+    """Autonomous turret behaviour for one ship: targeting, swivel, bursts, twin sync."""
 
     def __init__(self) -> None:
         self.cooldowns: dict[str, float] = {}
+        self.aim: dict[str, float] = {}
+        self.queued: dict[str, float] = {}  # scarred turrets: time until the burst's second round
+
+    def _fire(self, slot: str, origin, target, damage: int) -> PlayerBullet:
+        sx, sy = origin[0] + SLOT_OFFSETS[slot][0], origin[1] + SLOT_OFFSETS[slot][1]
+        angle = math.atan2(target.y - sy, target.x - sx)
+        self.aim[slot] = angle
+        speed = BULLET_SPEED * 0.8
+        return PlayerBullet((sx, sy), (math.cos(angle) * speed, math.sin(angle) * speed), damage)
 
     def update(self, dt: float, loadout: Loadout, origin, enemies, damage_mult: float) -> list[Bullet]:
-        shots: list[Bullet] = []
+        turrets = [(slot, part) for slot, part in loadout.parts() if part.kind == "turret"]
+        if not turrets:
+            return []
         ox, oy = origin
-        for slot, part in loadout.parts():
-            if part.kind != "turret":
+        candidates = [e for e in enemies if (e.x - ox) ** 2 + (e.y - oy) ** 2 <= TURRET_RANGE**2]
+        target = min(candidates, key=lambda e: (e.x - ox) ** 2 + (e.y - oy) ** 2, default=None)
+        damage = scaled(PLAYER_BULLET_DAMAGE, damage_mult)
+        period = loadout.turret_period()
+        twin = loadout.paired("turret")
+        keys = {"twin" if twin else slot for slot, _ in turrets}
+        for key in keys:  # each cooldown group ticks once per update
+            self.cooldowns[key] = max(0.0, self.cooldowns.get(key, 0.0) - dt)
+        shots: list[Bullet] = []
+        fired: set[str] = set()
+        for slot, part in turrets:
+            if slot in self.queued:  # the second round of a scarred burst
+                self.queued[slot] -= dt
+                if self.queued[slot] <= 0:
+                    del self.queued[slot]
+                    if target is not None:
+                        shots.append(self._fire(slot, origin, target, damage))
+            key = "twin" if twin else slot
+            if target is None or self.cooldowns[key] > 0:
                 continue
-            cd = self.cooldowns.get(slot, 0.0) - dt
-            if cd > 0:
-                self.cooldowns[slot] = cd
-                continue
-            sx, sy = ox + SLOT_OFFSETS[slot][0], oy + SLOT_OFFSETS[slot][1]
-            target = None
-            best = TURRET_RANGE**2
-            for e in enemies:
-                d2 = (e.x - sx) ** 2 + (e.y - sy) ** 2
-                if d2 <= best:
-                    target, best = e, d2
-            if target is None:
-                self.cooldowns[slot] = 0.0
-                continue
-            angle = math.atan2(target.y - sy, target.x - sx)
-            speed = BULLET_SPEED * 0.8
-            damage = scaled(PLAYER_BULLET_DAMAGE, damage_mult)
-            shots.append(PlayerBullet((sx, sy), (math.cos(angle) * speed, math.sin(angle) * speed), damage))
-            self.cooldowns[slot] = TURRET_PERIOD_RARE if part.rare else TURRET_PERIOD
+            shots.append(self._fire(slot, origin, target, damage))
+            fired.add(key)
+            if part.rare:
+                self.queued[slot] = BURST_GAP
+        for key in fired:
+            self.cooldowns[key] = period
         return shots
 
 
-def draw_loadout(surface: pygame.Surface, loadout: Loadout, center, alpha: int = 255) -> None:
+def draw_loadout(
+    surface: pygame.Surface, loadout: Loadout, center, alpha: int = 255, aim: dict[str, float] | None = None
+) -> None:
+    """Draw fitted parts; turrets swivel to ``aim`` (radians, 0 = right, -pi/2 = up)."""
     cx, cy = center
     for slot, part in loadout.parts():
         img = procgen.part_sprite(part.kind, part.rare)
+        if part.kind == "turret" and aim and slot in aim:
+            img = pygame.transform.rotate(img, -math.degrees(aim[slot]) - 90)
         if alpha < 255:
             img = img.copy()
             img.set_alpha(alpha)
