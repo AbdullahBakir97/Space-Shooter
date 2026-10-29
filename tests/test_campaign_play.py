@@ -1,17 +1,20 @@
-"""Campaign turns played through the real gameplay scene."""
+"""War loops played through the real combat scene, one fight at a time."""
 
 import random
 
 import pygame
 import pytest
 
+from space_shooter import campaign
 from space_shooter.campaign import new_campaign
 from space_shooter.game import Game
 from space_shooter.save import load_save
+from space_shooter.scenes.base import Scene
 from space_shooter.scenes.gameplay import GameplayScene
 from space_shooter.scenes.loop_end import LoopEndScene
+from space_shooter.scenes.run import CampaignRun
 from space_shooter.settings_store import Settings
-from tests.helpers import run_frames, silence_radio
+from tests.helpers import press, run_frames, silence_radio
 
 
 @pytest.fixture
@@ -22,9 +25,24 @@ def game():
     pygame.quit()
 
 
-def launch(game, route, seed=1):
-    scene = GameplayScene(game, seed=seed, route=route)
-    game.scenes.clear_to(scene)
+class Holder(Scene):
+    """Stands in for the flight scene underneath a fight."""
+
+    def __init__(self, game, run) -> None:
+        super().__init__(game)
+        self.run = run
+
+
+def start(game, seed=1):
+    run = CampaignRun(game, seed=seed)
+    game.scenes.clear_to(Holder(game, run))
+    return run
+
+
+def fight(game, run, node_id):
+    enc = campaign.encounter_for(game.system, run.state, node_id)
+    scene = GameplayScene(game, seed=1, run=run, node_id=node_id, encounter=enc)
+    game.scenes.push(scene)
     return scene
 
 
@@ -33,6 +51,7 @@ def clear_current(game, scene):
     d = scene.director
     while d.state == "drift":
         run_frames(game, 30)
+    run_frames(game, 2)
     scene.enemies.empty()
     d.cursor = len(d.plan)
     d.state = "clearing"
@@ -47,61 +66,88 @@ def die(game, scene):
     run_frames(game, 2)
 
 
-def test_route_run_claims_cleared_nodes(game):
-    scene = launch(game, ["o1", "m1"])
-    assert [e.name for e in scene.director.encounters] == ["COLD WAKE FIELD", "KESS"]
+def test_fight_win_claims_and_returns(game):
+    run = start(game)
+    scene = fight(game, run, "o1")
+    assert scene.director.encounter.name == "COLD WAKE FIELD"
+    run.player.health = 70
+    scene.score = 120
     clear_current(game, scene)
-    run_frames(game, 60)
-    die(game, scene)
-    state = game.campaign()
-    assert state.owner["o1"] == "player" and state.owner["m1"] != "player" and state.turn == 1
-    assert scene.result.report.claimed == ["o1"]
+    assert isinstance(game.scenes.top, Holder)
+    assert run.player.health == 70 and run.carried == 120 and run.reached == 0
+    assert game.campaign().owner["o1"] == "player" and load_save().campaign["owner"]["o1"] == "player"
+    assert run.result is None and game.campaign().turn == 0  # the loop goes on
 
 
-def test_clearing_route_ends_loop(game):
-    scene = launch(game, ["o1"])
+def test_fight_death_banks_half_keeps_claims(game):
+    run = start(game)
+    scene = fight(game, run, "o1")
+    scene.score = 120
     clear_current(game, scene)
-    run_frames(game, 90)
-    card = game.scenes.top
-    assert isinstance(card, LoopEndScene) and card.title == "ROUTE CLEARED"
-    assert game.campaign().owner["o1"] == "player" and game.save.loop == 2
-
-
-def test_death_in_first_drift_claims_nothing(game):  # review focus 2
-    scene = launch(game, ["o1"])
-    run_frames(game, 1)
+    scene = fight(game, run, "o3")
+    scene.score = 80
+    run_frames(game, 120)
     die(game, scene)
+    run_frames(game, 120)
+    assert isinstance(game.scenes.top, LoopEndScene)
     state = game.campaign()
-    assert scene.result.report.claimed == [] and state.turn == 1
-    assert sum(1 for o in state.owner.values() if o == "swarm") > 2  # the swarm still moved
+    assert state.owner["o1"] == "player" and state.turn == 1
+    assert run.result.report.claimed == ["o1"] and run.result.report.salvage_gained == 100 + 100
+    assert run.result.salvage == 200 and game.save.loop == 2
 
 
-def test_requisition_fitted_once(game):  # review focus 4
+def test_requisition_fitted_once(game):
     state = game.campaign()
     state.salvage = 2000
     state.requisition = ["turret", "armour"]
     game.store_campaign(state)
-    scene = launch(game, ["o1"])
-    lo = scene.player.loadout
+    run = start(game)
+    lo = run.player.loadout
     assert lo.count("turret") == 1 and lo.count("armour") == 1
     assert game.campaign().requisition == [] and load_save().campaign["requisition"] == []
 
 
-def test_stale_route_is_trimmed(game):  # review focus 1
-    assert launch(game, ["o1", "m5"]).route == ["o1"]
-    fallback = launch(game, ["o3"]).route
-    assert len(fallback) == 1 and fallback[0] in ("o1", "o2")
+def test_repeat_type_not_recorded_twice(game):  # review focus 3
+    run = start(game)
+    scene = fight(game, run, "o1")
+    clear_current(game, scene)
+    recorded = len(run.recorder.samples)
+    assert recorded > 0 and {s[0] for s in run.recorder.samples} == {0}
+    scene = fight(game, run, "o2")  # another Cold Wake fight
+    clear_current(game, scene)
+    assert len(run.recorder.samples) == recorded and not scene.recording
 
 
-def test_warden_kill_wins_campaign(game):
+def test_echoes_fly_by_encounter_type(game):
+    from tests.test_gameplay import seeded_trace
+
+    game.save.echoes = [seeded_trace(5).to_data()]
+    run = start(game)
+    scene = fight(game, run, "o1")
+    assert scene.echo_key == 0
+    scene = GameplayScene(game, run=run, node_id="m1", encounter=campaign.encounter_for(game.system, run.state, "m1"))
+    assert scene.echo_key == 2  # KESS plays as the Graveyard
+
+
+def test_window_close_mid_fight_closes_once(game):  # review focus 4
+    run = start(game)
+    fight(game, run, "o1")
+    run_frames(game, 120)
+    game.close_open_loop()
+    game.close_open_loop()
+    assert game.campaign().turn == 1 and game.save.loop == 2 and len(game.save.records) == 1
+
+
+def test_warden_kill_wins_without_docking(game):  # review focus 5
     from space_shooter.entities.bullets import PlayerBullet
 
     state = game.campaign()
     for n in ("m1", "m2", "m3", "m4", "m5", "c1"):
         state.owner[n] = "player"
     game.store_campaign(state)
-    scene = launch(game, ["c2"])
-    run_frames(game, int(60 * 6.2))
+    run = start(game)
+    scene = fight(game, run, "c2")
+    run_frames(game, int(60 * 1.8))
     warden = scene.boss
     assert warden is not None
     warden.hp, warden.y = 1, warden.target_y
@@ -110,7 +156,8 @@ def test_warden_kill_wins_campaign(game):
     run_frames(game, 3)
     card = game.scenes.top
     assert isinstance(card, LoopEndScene) and card.title == "THE WARDEN IS SILENT"
-    assert scene.result.report.status == "won" and game.save.act1_complete
+    assert run.result.report.status == "won" and game.save.act1_complete
+    assert run.finish(died=True) is run.result and game.save.loop == 2
     assert game.campaign().status == "active" and game.campaign().owner["c2"] == "neutral"  # fresh war next
 
 
@@ -121,65 +168,45 @@ def test_war_lost_resets_and_keeps_echoes(game):
     state = game.campaign()
     state.owner.update({n: "swarm" for n in state.owner if n != "home"})  # home is all that is left
     game.store_campaign(state)
-    scene = launch(game, ["o1"])
+    run = start(game)
+    scene = fight(game, run, "o1")
     run_frames(game, 1)
     die(game, scene)
-    assert scene.result.report.status == "lost" and "war_lost" in game.save.flags
+    assert run.result.report.status == "lost" and "war_lost" in game.save.flags
     assert [e.loop for e in game.save.echoes][:1] == [9]
     fresh = game.campaign()
     assert fresh.status == "active" and fresh.owner == new_campaign(game.system).owner
 
 
-def test_loop_end_card_lists_report(game):
-    scene = launch(game, ["o1"])
+def test_dock_card_lists_report(game):
+    run = start(game)
+    scene = fight(game, run, "o1")
     clear_current(game, scene)
-    run_frames(game, 90)
-    card = game.scenes.top
+    result = run.finish(died=False)
+    assert result.docked and "node_claimed" in game.save.flags
+    card = LoopEndScene(game, result)
+    game.scenes.push(card)
+    assert card.title == "DOCKED"
     lines = card.report_lines()
     assert any("COLD WAKE FIELD" in line for line in lines) and any("salvage" in line.lower() for line in lines)
     card.draw(game.screen)
 
 
-def test_campaign_flags_are_set(game):
-    scene = launch(game, ["o1"])
-    clear_current(game, scene)
-    run_frames(game, 90)
-    assert "node_claimed" in game.save.flags
-
-
-def test_headless_campaign_autopilot(game):
-    """Five turns through the real screens: plan on the map, fly, read the card, back to the hangar."""
-    from space_shooter.campaign import valid_route
+def test_loop_end_plays_due_log(game):
     from space_shooter.scenes.hangar import HangarScene
-    from space_shooter.scenes.map import MapScene
-    from tests.helpers import press, select
+    from space_shooter.scenes.log_panel import LogPanel
+    from space_shooter.story import LogDirector, load_logs
 
-    game.save.read_logs.append("a1_open")
-    game.scenes.clear_to(HangarScene(game))
-    start = dict(game.campaign().owner)
-    for turn in range(5):
-        select(game, "LAUNCH")
-        m = game.scenes.top
-        assert isinstance(m, MapScene)
-        m.selected = next(n for n in sorted(game.system.nodes) if valid_route(game.system, m.state, [n]))
-        m.toggle()
-        m.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_l, unicode=""))
-        scene = game.scenes.top
-        assert isinstance(scene, GameplayScene)
-        if turn % 2 == 0:
-            clear_current(game, scene)
-            run_frames(game, 90)
-        else:
-            run_frames(game, 200)
-            die(game, scene)
-        for _ in range(20):  # the death beat plays before the card
-            if isinstance(game.scenes.top, LoopEndScene):
-                break
-            run_frames(game, 30)
-        assert isinstance(game.scenes.top, LoopEndScene)
-        while not isinstance(game.scenes.top, HangarScene):
-            press(game, "confirm")
-            run_frames(game, 2)
-    state = game.campaign()
-    assert state.turn == 5 and state.owner != start
-    assert sum(1 for o in state.owner.values() if o == "player") >= 2
+    logs = load_logs()
+    game.save.read_logs[:] = [log.id for log in logs if log.id != "m_first_claim"]
+    game.logs = LogDirector(logs, game.save.read_logs)
+    run = start(game)
+    scene = fight(game, run, "o1")
+    clear_current(game, scene)
+    card = LoopEndScene(game, run.finish(died=False))
+    game.scenes.push(card)
+    card.time = 10
+    press(game, "confirm")
+    top = game.scenes.top
+    assert isinstance(top, LogPanel) and top.entry.id == "m_first_claim"
+    assert isinstance(game.scenes.stack[0], HangarScene)

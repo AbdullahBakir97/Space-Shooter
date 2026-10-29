@@ -32,7 +32,7 @@ class RunResult:
     echoes_lost: list[int] = field(default_factory=list)
     victory: bool = False
     report: object | None = None  # campaign.TurnReport when the loop was a campaign turn
-    cleared_route: bool = False
+    docked: bool = False  # the tug flew home and docked
     reached_name: str | None = None
 
 
@@ -51,8 +51,8 @@ class LoopEndScene(Scene):
             return "THE WARDEN IS SILENT"
         if r.report is not None and r.report.status == "lost":
             return "THE WAR IS LOST"
-        if r.cleared_route:
-            return "ROUTE CLEARED"
+        if r.docked:
+            return "DOCKED"
         return f"LOOP {r.loop}"
 
     def report_lines(self) -> list[str]:
@@ -89,9 +89,16 @@ class LoopEndScene(Scene):
         if self.time < INPUT_DELAY or action not in ("confirm", "fire", "back"):
             return
         from space_shooter.scenes.hangar import HangarScene
+        from space_shooter.scenes.log_panel import LogPanel
+        from space_shooter.story import state_from_save
 
         self.game.audio.play("menu_select")
+        entry = self.game.logs.next_log(state_from_save(self.game.save))  # what this loop changed, heard now
         self.game.scenes.clear_to(HangarScene(self.game))
+        if entry is not None and self.game.scenes.top is not None and not isinstance(self.game.scenes.top, LogPanel):
+            self.game.logs.mark_read(entry.id)
+            self.game.persist()
+            self.game.scenes.push(LogPanel(self.game, entry))
 
     def update(self, dt: float) -> None:
         self.time += dt

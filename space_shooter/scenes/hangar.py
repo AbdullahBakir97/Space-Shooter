@@ -25,6 +25,7 @@ class HangarScene(Scene):
             [
                 MenuItem("LAUNCH", self.launch),
                 MenuItem("SHIPYARD", self.show_shipyard),
+                MenuItem("CHART", self.show_chart),
                 MenuItem("LOG ARCHIVE", self.show_archive),
                 MenuItem("RECORDS", self.show_records),
                 MenuItem("SETTINGS", self.show_settings),
@@ -49,9 +50,14 @@ class HangarScene(Scene):
 
     # -- menu ----------------------------------------------------------------
     def launch(self) -> None:
-        from space_shooter.scenes.map import MapScene
+        from space_shooter.scenes.flight import FlightScene
 
-        self.game.scenes.push(MapScene(self.game))
+        self.game.scenes.clear_to(FlightScene(self.game))
+
+    def show_chart(self) -> None:
+        from space_shooter.scenes.chart import ChartScene
+
+        self.game.scenes.push(ChartScene(self.game))
 
     def show_shipyard(self) -> None:
         from space_shooter.scenes.shipyard import ShipyardScene

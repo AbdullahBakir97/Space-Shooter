@@ -151,7 +151,7 @@ class Game:
         if raw is not None:
             try:
                 state = CampaignState.from_dict(raw)
-            except (KeyError, TypeError, ValueError):
+            except (AttributeError, KeyError, TypeError, ValueError):
                 state = None
         if state is None or state.status != "active" or set(state.owner) != set(self.system.nodes):
             state = new_campaign(self.system)
@@ -174,6 +174,8 @@ class Game:
         for scene in self.scenes.stack:
             if isinstance(scene, GameplayScene):
                 scene.end_loop(victory=False)
+            elif getattr(scene, "run", None) is not None:  # flying the star system between fights
+                scene.run.finish(died=True)
 
     def quit(self) -> None:
         self.running = False

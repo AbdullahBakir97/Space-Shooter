@@ -3,9 +3,8 @@ import pytest
 
 from space_shooter.game import Game
 from space_shooter.save import load_save
-from space_shooter.scenes.gameplay import GameplayScene
+from space_shooter.scenes.chart import ChartScene
 from space_shooter.scenes.hangar import HangarScene
-from space_shooter.scenes.map import MapScene
 from space_shooter.scenes.shipyard import ShipyardScene
 from space_shooter.settings_store import Settings
 from tests.helpers import press, select, silence_radio
@@ -19,9 +18,9 @@ def game():
     pygame.quit()
 
 
-def open_map(game):
+def open_chart(game):
     game.scenes.clear_to(HangarScene(game))
-    game.scenes.push(MapScene(game))
+    game.scenes.push(ChartScene(game))
     return game.scenes.top
 
 
@@ -30,7 +29,7 @@ def key(game, k):
 
 
 def test_map_starts_on_home_and_moves_by_direction(game):
-    m = open_map(game)
+    m = open_chart(game)
     assert m.selected == "home"
     m.move("right")
     assert m.selected == "o2"
@@ -40,46 +39,18 @@ def test_map_starts_on_home_and_moves_by_direction(game):
     assert m.selected in ("o1", "o2")
 
 
-def test_map_builds_only_valid_routes(game):
-    m = open_map(game)
-    for node in ("o1", "o3"):
-        m.selected = node
-        m.toggle()
-    assert m.route == ["o1", "o3"]
-    m.selected = "m5"
-    m.toggle()
-    assert m.route == ["o1", "o3"]  # not adjacent: refused
-    m.selected = "home"
-    m.toggle()
-    assert m.route == ["o1", "o3"]
-    m.selected = "o1"
-    m.toggle()
-    assert m.route == []  # removing a stop drops everything after it
-
-
-def test_map_launch_starts_route(game):
-    m = open_map(game)
-    m.launch()
-    assert game.scenes.top is m  # nothing planned yet
-    m.selected = "o1"
-    m.toggle()
-    key(game, pygame.K_l)
-    top = game.scenes.top
-    assert isinstance(top, GameplayScene) and top.route == ["o1"]
-
-
 def test_map_fortify_spends_salvage(game):
     state = game.campaign()
     state.salvage = 1000
     game.store_campaign(state)
-    open_map(game)
+    open_chart(game)
     key(game, pygame.K_f)  # home is selected
     assert "home" in game.campaign().fortified and game.campaign().salvage == 0
     assert "home" in load_save().campaign["fortified"]
 
 
 def test_map_mouse_selects_node(game):
-    m = open_map(game)
+    m = open_chart(game)
     x, y = game.system.nodes["m2"].pos
     m.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(x + 5, y - 4), button=1))
     assert m.selected == "m2"
@@ -91,7 +62,7 @@ def test_map_draws_every_state(game):
     state.hive_age["o5"] = 3
     state.fortified.add("o1")
     game.store_campaign(state)
-    m = open_map(game)
+    m = open_chart(game)
     m.selected = "o1"
     for _ in range(3):
         m.update(1 / 60)
@@ -113,17 +84,17 @@ def test_shipyard_requisitions(game):
     game.scenes.draw(game.screen)
 
 
-def test_hangar_launch_opens_map(game):
+def test_hangar_opens_chart(game):
     game.save.read_logs.append("a1_open")
     game.scenes.clear_to(HangarScene(game))
     labels = [i.label for i in game.scenes.top.menu.items]
-    assert labels == ["LAUNCH", "SHIPYARD", "LOG ARCHIVE", "RECORDS", "SETTINGS", "QUIT"]
-    select(game, "LAUNCH")
-    assert isinstance(game.scenes.top, MapScene)
+    assert labels == ["LAUNCH", "SHIPYARD", "CHART", "LOG ARCHIVE", "RECORDS", "SETTINGS", "QUIT"]
+    select(game, "CHART")
+    assert isinstance(game.scenes.top, ChartScene)
 
 
 def test_arrows_reach_every_location(game):
-    m = open_map(game)
+    m = open_chart(game)
     seen, todo = {"home"}, ["home"]
     while todo:
         node = todo.pop()

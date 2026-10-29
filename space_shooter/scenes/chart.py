@@ -1,4 +1,4 @@
-"""The war map: plan this loop's route across the star system."""
+"""The system chart: who holds what, where the swarm is, and where the tug flies."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import math
 
 import pygame
 
-from space_shooter import campaign
+from space_shooter import campaign, flight
 from space_shooter.config import HEIGHT, WIDTH
 from space_shooter.encounters import ENCOUNTERS
 from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL, STEEL_DIM, VOID
@@ -19,13 +19,28 @@ CLICK_RADIUS = 30
 OWNER_NAMES = {"player": "HELD", "swarm": "SWARM", "neutral": "NEUTRAL"}
 
 
-class MapScene(Scene):
-    def __init__(self, game) -> None:
+def owner_colour(system, state, node_id: str, time: float):
+    """Bone for home, steel for yours, rust for the swarm, a pulsing ember for hives, ash for neutral."""
+    if node_id == campaign.HOME:
+        return BONE
+    if state.is_hive(node_id):
+        pulse = 0.5 + 0.5 * math.sin(time * 4)
+        return tuple(int(r + (e - r) * pulse) for r, e in zip(RUST, EMBER, strict=True))
+    owner = state.owner[node_id]
+    if owner == "player":
+        return STEEL
+    if owner == "swarm":
+        return RUST
+    return STEEL_DIM if campaign.locked(system, state, node_id) else ASH
+
+
+class ChartScene(Scene):
+    def __init__(self, game, flight=None) -> None:
         super().__init__(game)
         self.system = game.system
-        self.state = game.campaign()
+        self.flight = flight  # the flight scene underneath, when opened in flight
+        self.state = flight.run.state if flight is not None else game.campaign()
         self.selected = campaign.HOME
-        self.route: list[str] = []
         self.time = 0.0
         self.notice = ""
 
@@ -45,27 +60,6 @@ class MapScene(Scene):
             self.selected = min(scored)[2]
             self.game.audio.play("menu_move")
 
-    def toggle(self) -> None:
-        """Add the selection to the route, or remove it and every stop after it."""
-        if self.selected in self.route:
-            self.route = self.route[: self.route.index(self.selected)]
-        elif campaign.valid_route(self.system, self.state, [*self.route, self.selected]):
-            self.route.append(self.selected)
-        else:
-            self.notice = self._refusal(self.selected)
-            return
-        self.notice = ""
-        self.game.audio.play("menu_select")
-
-    def _refusal(self, node_id: str) -> str:
-        if node_id == campaign.HOME or self.state.owner[node_id] == "player":
-            return "That ground is already yours."
-        if len(self.route) >= campaign.MAX_ROUTE:
-            return f"A route has at most {campaign.MAX_ROUTE} stops."
-        if campaign.locked(self.system, self.state, node_id):
-            return "Locked."
-        return "Not reachable from the route."
-
     def fortify_selected(self) -> None:
         if campaign.fortify(self.state, self.selected):
             self.game.store_campaign(self.state)
@@ -74,29 +68,19 @@ class MapScene(Scene):
         else:
             self.notice = f"Fortifying costs {campaign.FORTIFY_COST} salvage and needs held ground."
 
-    def launch(self) -> None:
-        if not campaign.valid_route(self.system, self.state, self.route):
-            self.notice = "Plan a route first: ENTER on a location next to your ground."
-            return
-        from space_shooter.scenes.gameplay import GameplayScene
-
-        self.game.scenes.clear_to(GameplayScene(self.game, route=list(self.route)))
-
     # -- scene protocol ------------------------------------------------------
     def handle_action(self, action: str) -> None:
         if action in DIRECTIONS:
             self.move(action)
-        elif action in ("confirm", "fire"):
-            self.toggle()
-        elif action == "back":
+        elif action in ("back", "confirm"):
             self.game.scenes.pop()
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_l:
-                self.launch()
-            elif event.key == pygame.K_f:
+            if event.key == pygame.K_f:
                 self.fortify_selected()
+            elif event.key == pygame.K_TAB:
+                self.game.scenes.pop()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             hit = self.node_at(event.pos)
             if hit is not None:
@@ -116,17 +100,7 @@ class MapScene(Scene):
 
     # -- drawing -------------------------------------------------------------
     def _colour(self, node_id: str):
-        if node_id == campaign.HOME:
-            return BONE
-        if self.state.is_hive(node_id):
-            pulse = 0.5 + 0.5 * math.sin(self.time * 4)
-            return tuple(int(r + (e - r) * pulse) for r, e in zip(RUST, EMBER, strict=True))
-        owner = self.state.owner[node_id]
-        if owner == "player":
-            return STEEL
-        if owner == "swarm":
-            return RUST
-        return STEEL_DIM if campaign.locked(self.system, self.state, node_id) else ASH
+        return owner_colour(self.system, self.state, node_id, self.time)
 
     def draw(self, surface: pygame.Surface) -> None:
         surface.fill(VOID)
@@ -139,24 +113,19 @@ class MapScene(Scene):
                     continue
                 drawn.add((a, b))
                 pygame.draw.line(surface, STEEL_DIM, nodes[a].pos, nodes[b].pos, 1)
-        stops = [campaign.HOME, *self.route] if self.route else []
-        for a, b in zip(stops, stops[1:], strict=False):
-            start = nodes[a].pos if a != campaign.HOME else self._route_anchor(b)
-            pygame.draw.line(surface, EMBER, start, nodes[b].pos, 3)
         for node in nodes.values():
             self._draw_node(surface, node)
+        if self.flight is not None:
+            for p in self.flight.patrols:
+                x, y = flight.patrol_pos(self.system, p)
+                pygame.draw.circle(surface, RUST, (round(x / flight.SCALE), round(y / flight.SCALE)), 3)
+            tx, ty = self.flight.tug.x / flight.SCALE, self.flight.tug.y / flight.SCALE
+            pygame.draw.polygon(surface, BONE, [(tx, ty - 7), (tx + 5, ty + 5), (tx - 5, ty + 5)])
         self._draw_panel(surface)
-        hint = "ARROWS select   ENTER add/remove   F fortify   L launch   ESC back"
+        hint = "ARROWS select   F fortify   ESC back"
         draw_text(surface, hint, 18, (WIDTH // 2, HEIGHT - 16), ASH)
         if self.notice:
             draw_text(surface, self.notice, 20, (WIDTH // 2, HEIGHT - 40), EMBER)
-
-    def _route_anchor(self, first: str) -> tuple[int, int]:
-        """Where the drawn route starts: the held location next to its first stop."""
-        held = [n for n in self.system.neighbours(first) if self.state.owner[n] == "player"]
-        if not held:
-            return self.system.nodes[campaign.HOME].pos
-        return self.system.nodes[min(held, key=lambda n: self.system.distance_to_home(n))].pos
 
     def _draw_node(self, surface: pygame.Surface, node) -> None:
         colour = self._colour(node.id)
@@ -171,8 +140,6 @@ class MapScene(Scene):
             pygame.draw.rect(surface, colour, (x - radius, y - radius, radius * 2, radius * 2))
         if node.id in self.state.fortified:
             pygame.draw.circle(surface, BONE, (x, y), radius + 5, 1)
-        if node.id in self.route:
-            draw_text(surface, str(self.route.index(node.id) + 1), 18, (x, y), VOID, shadow=False)
         if node.id == self.selected:
             pulse = 3 + int(2 * math.sin(self.time * 6))
             pygame.draw.circle(surface, BONE, (x, y), radius + 8 + pulse, 2)
@@ -194,8 +161,6 @@ class MapScene(Scene):
             need = f"hold {campaign.GATE_NEEDS_MIDDLE} middle worlds" if node.id == campaign.GATE else "take the gate"
             lines.append((f"Locked: {need}", EMBER, 16))
         lines.append((f"Salvage {self.state.salvage}   Turn {self.state.turn + 1}", STEEL, 16))
-        route = " > ".join(self.system.nodes[n].name for n in self.route) or "no route planned"
-        lines.append((route, EMBER if self.route else STEEL_DIM, 14))
         y = 14
         for text, colour, size in lines:
             draw_text(surface, text, size, (16, y), colour, "topleft")

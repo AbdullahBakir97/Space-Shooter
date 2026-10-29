@@ -108,3 +108,12 @@ def test_trace_data_round_trip():
     t = EchoTrace(2, 1, 12.0, [(0, 0.0, 1.5, 2.5, True)], [(0, 0.0, {"fore_l": "slug*"})])
     back = EchoTrace.from_data(t.to_data())
     assert back.loop == 2 and back.loadouts == t.loadouts and back.samples[0][4] is True
+
+
+def test_recorder_has_encounter():
+    from space_shooter.echoes import EchoRecorder
+
+    r = EchoRecorder(3)
+    assert not r.has_encounter(2)
+    r.begin_encounter(2)
+    assert r.has_encounter(2) and not r.has_encounter(0)
