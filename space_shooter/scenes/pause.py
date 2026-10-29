@@ -42,9 +42,12 @@ class PauseScene(Scene):
         from space_shooter.scenes.loop_end import LoopEndScene
 
         self.game.scenes.pop()
-        gameplay = self.game.scenes.top
-        if isinstance(gameplay, GameplayScene):
-            self.game.scenes.push(LoopEndScene(self.game, gameplay.end_loop(victory=False)))
+        below = self.game.scenes.top
+        if isinstance(below, GameplayScene):
+            self.game.scenes.push(LoopEndScene(self.game, below.end_loop(victory=False)))
+        elif getattr(below, "run", None) is not None:  # abandoning in flight: the tug is lost
+            self.game.audio.stop_all_loops()
+            self.game.scenes.push(LoopEndScene(self.game, below.run.finish(died=True)))
 
     def handle_action(self, action: str) -> None:
         if action in ("back", "pause"):

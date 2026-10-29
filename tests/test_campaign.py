@@ -9,16 +9,14 @@ from space_shooter.campaign import (
     PART_COST,
     CampaignState,
     TurnReport,
-    apply_run,
+    claim,
     fortify,
     load_system,
     locked,
     new_campaign,
     requisition,
-    route_encounters,
     spread_count,
     swarm_turn,
-    valid_route,
 )
 from space_shooter.encounters import ENCOUNTERS
 
@@ -67,53 +65,15 @@ def test_new_campaign_owners(system):
     assert s.status == "active" and s.turn == 0 and s.salvage == 0 and s.requisition == []
 
 
-def test_route_rules(system):
-    s = new_campaign(system)
-    assert valid_route(system, s, ["o1"])
-    assert valid_route(system, s, ["o1", "o3"])
-    assert valid_route(system, s, ["o1", "m1", "m5"])
-    assert valid_route(system, s, ["o2", "o4", "o6"])  # attacking swarm ground is allowed
-    for bad in ([], ["o3"], ["home"], ["o1", "o1"], ["o1", "m1", "m5", "m3"], ["o1", "m5"], ["zz"]):
-        assert not valid_route(system, s, bad), bad
-    s.owner["o1"] = "player"
-    assert not valid_route(system, s, ["o1"])  # already yours
-    assert valid_route(system, s, ["o3"])  # adjacent to ground you hold
-
-
 def test_gate_locked_until_every_middle_world(system):
     s = new_campaign(system)
     for n in ("m1", "m2", "m3", "m5"):
         s.owner[n] = "player"
     assert locked(system, s, "c1") and locked(system, s, "c2")
-    assert not valid_route(system, s, ["c1"])
     s.owner["m4"] = "player"
     assert not locked(system, s, "c1") and locked(system, s, "c2")
-    assert valid_route(system, s, ["c1", "c2"])
-
-
-def test_route_encounter_twists(system):
-    s = new_campaign(system)
-    s.hive_age["o6"] = 3
-    plain, swarmed, hive = route_encounters(system, s, ["o1", "o5", "o6"])
-    assert plain.index == 0 and plain.name == "COLD WAKE FIELD" and plain.hull == 1.0
-    assert swarmed.index == 2 and swarmed.hull == pytest.approx(1.25)
-    base = ENCOUNTERS[3]
-    assert hive.hull == pytest.approx(1.5)
-    assert [e.at for e in hive.script] == pytest.approx([e.at * 0.8 for e in base.script])
-
-
-def test_apply_run_claims_and_earns(system):
-    s = new_campaign(system)
-    report = apply_run(system, s, ["o1", "m1"], cleared=2, run_salvage=500, warden_killed=False, rng=random.Random(0))
-    assert {"o1", "m1"} <= owners(s, "player") and report.claimed == ["o1", "m1"]
-    assert report.salvage_gained == 500 + 100 + 300 and s.salvage == 900
-    assert s.turn == 1 and isinstance(report, TurnReport)
-
-
-def test_partial_run_claims_prefix(system):
-    s = new_campaign(system)
-    apply_run(system, s, ["o1", "m1"], cleared=1, run_salvage=0, warden_killed=False, rng=random.Random(0))
-    assert s.owner["o1"] == "player" and s.owner["m1"] != "player"
+    s.owner["c1"] = "player"
+    assert not locked(system, s, "c2")
 
 
 def test_swarm_spreads_toward_home(system):
@@ -179,7 +139,7 @@ def test_retaken_hive_is_cleared(system):
     s = new_campaign(system)
     s.hive_age["o5"] = 4
     s.owner["o3"] = "player"
-    apply_run(system, s, ["o5"], cleared=1, run_salvage=0, warden_killed=False, rng=random.Random(0))
+    claim(s, "o5")
     assert s.owner["o5"] == "player" and s.hive_age.get("o5", 0) == 0
 
 
@@ -197,16 +157,6 @@ def test_home_taken_loses(system):
     report = TurnReport()
     swarm_turn(system, s, random.Random(0), report)
     assert s.owner["home"] == "swarm" and s.status == "lost" and report.status == "lost"
-
-
-def test_warden_win(system):
-    s = new_campaign(system)
-    for n in ("m1", "m2", "m3", "m4", "c1"):
-        s.owner[n] = "player"
-    before = dict(s.owner)
-    report = apply_run(system, s, ["c2"], cleared=1, run_salvage=0, warden_killed=True, rng=random.Random(0))
-    assert s.status == "won" and report.status == "won"
-    assert {k: v for k, v in s.owner.items() if k != "c2"} == {k: v for k, v in before.items() if k != "c2"}
 
 
 def test_requisition_and_fortify_costs(system):

@@ -16,7 +16,6 @@ GATE = "c1"
 CORE = "c2"
 GATE_NEEDS_MIDDLE = 5
 SPREAD_STEP = 6  # the swarm spreads one location more every this many turns
-MAX_ROUTE = 3
 SWARM_HULL = 1.25
 HIVE_HULL = 1.5
 HIVE_PACE = 0.8  # hive scripts run 20% faster
@@ -170,32 +169,9 @@ def locked(system: System, state: CampaignState, node_id: str) -> bool:
     if node_id == GATE:
         held_middle = sum(1 for n in system.ring_ids("middle") if state.owner.get(n) == "player")
         return held_middle < GATE_NEEDS_MIDDLE
-    if node_id == CORE:  # a route may still pass through the gate on its way in (see valid_route)
+    if node_id == CORE:
         return state.owner.get(GATE) != "player"
     return False
-
-
-def valid_route(system: System, state: CampaignState, route: list[str]) -> bool:
-    if not 1 <= len(route) <= MAX_ROUTE or len(set(route)) != len(route):
-        return False
-    held = set(state.held())
-    for i, node_id in enumerate(route):
-        if node_id not in system.nodes or node_id == HOME or node_id in held:
-            return False
-        if locked(system, state, node_id) and not (node_id == CORE and i > 0 and route[i - 1] == GATE):
-            return False
-        anchors = held if i == 0 else {route[i - 1]}
-        if not system.neighbours(node_id) & anchors:
-            return False
-    return True
-
-
-def valid_prefix(system: System, state: CampaignState, route: list[str]) -> list[str]:
-    """The longest leading part of ``route`` that is still a valid route."""
-    for end in range(len(route), 0, -1):
-        if valid_route(system, state, route[:end]):
-            return list(route[:end])
-    return []
 
 
 def can_engage(system: System, state: CampaignState, node_id: str) -> bool:
@@ -254,22 +230,6 @@ def end_turn(
     return report
 
 
-def route_encounters(system: System, state: CampaignState, route: list[str]) -> tuple[Encounter, ...]:
-    """Each location plays as its base encounter, renamed, toughened on swarm ground and hives."""
-    out = []
-    for node_id in route:
-        node = system.nodes[node_id]
-        base = ENCOUNTERS[node.template]
-        enc = replace(base, name=node.name)
-        if state.is_hive(node_id):
-            script = tuple(replace(e, at=e.at * HIVE_PACE) for e in base.script)
-            enc = replace(enc, hull=HIVE_HULL, script=script)
-        elif state.owner.get(node_id) == "swarm":
-            enc = replace(enc, hull=SWARM_HULL)
-        out.append(enc)
-    return tuple(out)
-
-
 def spread_count(state: CampaignState) -> int:
     hives = sum(1 for n in state.owner if state.is_hive(n))
     return min(3, 1 + state.turn // SPREAD_STEP) + hives // 2
@@ -309,33 +269,6 @@ def swarm_turn(system: System, state: CampaignState, rng: random.Random, report:
             break
     report.home_threatened = any(state.owner.get(n) == "swarm" for n in system.neighbours(HOME))
     report.status = state.status
-
-
-def apply_run(
-    system: System,
-    state: CampaignState,
-    route: list[str],
-    cleared: int,
-    run_salvage: int,
-    warden_killed: bool,
-    rng: random.Random,
-) -> TurnReport:
-    """Close one turn: claim cleared ground, pay salvage and yields, then let the swarm move."""
-    report = TurnReport()
-    for node_id in route[: max(0, cleared)]:
-        state.owner[node_id] = "player"
-        state.hive_age.pop(node_id, None)
-        report.claimed.append(node_id)
-    yields = sum(system.nodes[n].yield_ for n in state.held())
-    report.salvage_gained = run_salvage + yields
-    state.salvage += report.salvage_gained
-    if warden_killed:
-        state.status = "won"
-        report.status = "won"
-    else:
-        swarm_turn(system, state, rng, report)
-    state.turn += 1
-    return report
 
 
 def requisition(state: CampaignState, kind: str) -> bool:
