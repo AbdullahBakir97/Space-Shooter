@@ -11,6 +11,7 @@ class Dash:
         self.max_charges = max_charges
         self.recharge = recharge
         self.charges = max_charges
+        self.granted = max_charges  # most thrusters fitted this loop: only new highs bring a charge
         self.remaining = 0.0
         self._refill = 0.0  # progress toward the next charge, seconds
 
@@ -26,9 +27,13 @@ class Dash:
         return min(1.0, self._refill / self.recharge)
 
     def configure(self, max_charges: int, recharge: float) -> None:
-        """Follow the loadout: each newly fitted thruster brings one charge; losing one removes it."""
-        if max_charges > self.max_charges:
-            self.charges += max_charges - self.max_charges
+        """Follow the loadout: a thruster fitted for the first time this loop brings its charge.
+
+        Losing a thruster removes its charge; picking the same one back up does not refill it.
+        """
+        if max_charges > self.granted:
+            self.charges += max_charges - self.granted
+            self.granted = max_charges
         self.max_charges = max_charges
         self.recharge = recharge
         self.charges = min(self.charges, max_charges)

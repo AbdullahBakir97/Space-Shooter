@@ -681,8 +681,9 @@ def test_echo_pressure_reaches_the_warden(game):
 
     game.save.echoes = [seeded_trace(n, encounters=(WARDEN_INDEX,), x=150.0 + n * 100).to_data() for n in range(1, 6)]
     scene = start_at(game, WARDEN_INDEX)
-    base = round(600 * scene.difficulty.enemy_hp * scene.hull_mult)
-    assert scene.boss.max_hp == round(600 * scene.difficulty.enemy_hp * scene.hull_mult * 1.40) != base
+    base = round(600 * scene.difficulty.enemy_hp * scene.hull_mult * 0.4)
+    bare = 0.4  # no parts fitted: the Warden's loadout scale
+    assert scene.boss.max_hp == round(600 * scene.difficulty.enemy_hp * scene.hull_mult * 1.40 * bare) != base
 
 
 def test_echo_replays_heavy_slugs(game):
@@ -716,3 +717,48 @@ def test_shrapnel_points_where_it_flies(game):
     upright = min(new, key=lambda b: abs(b.vx))
     assert sideways.image.get_width() > sideways.image.get_height()
     assert upright.image.get_height() > upright.image.get_width()
+
+
+@pytest.mark.parametrize("parts,scale", [(0, 0.4), (3, 0.7), (6, 1.0)])
+def test_warden_hull_scales_with_loadout(game, parts, scale):
+    from space_shooter.encounters import WARDEN_INDEX, Spawn
+
+    scene = start_at(game, 0)
+    contacts = [(-14, -30), (14, -30), (-30, 2), (30, 2), (-16, 30), (16, 30)]
+    for contact in contacts[:parts]:
+        scene.player.loadout.attach(Part("armour"), contact)
+    scene.director.index = WARDEN_INDEX
+    scene._spawn(Spawn(0.0, "warden", 0.5))
+    expected = round(600 * scene.difficulty.enemy_hp * scene.hull_mult * scale)
+    assert scene.boss.max_hp == expected
+
+
+def test_claw_kills_can_drop_patches(game):
+    scene = start_at(game, 1)
+    scene.enemies.empty()
+    scene.player.loadout.attach(Part("claw"), (-14, -30))
+    scene.rng = random.Random(11)
+    codes = []
+    for _ in range(200):
+        victim = ENEMY_CLASSES["drone"](400.0)
+        victim.y = 200
+        scene.enemies.add(victim)
+        scene.drops.empty()
+        scene._kill_enemy(victim, force_drop=True, claw=True)
+        codes += [d.code for d in scene.drops]
+    assert len(codes) == 200 and 0.15 < codes.count("patch") / 200 < 0.35
+
+
+def test_drag_field_releases_bullets_when_the_player_dies(game):
+    scene = start_at(game, 0)
+    scene.player.loadout.attach(Part("tractor"), (-16, 30))
+    shot = EnemyBullet((scene.player.x, scene.player.y - 100), (0, 0))
+    scene.enemy_bullets.add(shot)
+    run_frames(game, 1)
+    assert shot.speed_scale == pytest.approx(0.6)
+    rng = random.Random(0)
+    while not scene.player.dead:
+        scene.player.invuln_timer = 0
+        scene.player.take_damage(999, rng)
+    run_frames(game, 2)
+    assert shot.speed_scale == 1.0

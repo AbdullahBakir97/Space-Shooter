@@ -44,7 +44,7 @@ def claw_contacts(scene, dt: float) -> None:
                 continue
             cooldowns[id(enemy)] = CLAW_COOLDOWN
             if enemy.hit(CLAW_DAMAGE_RARE if part.rare else CLAW_DAMAGE):
-                scene._kill_enemy(enemy, force_drop=not enemy.is_boss)
+                scene._kill_enemy(enemy, force_drop=not enemy.is_boss, claw=True)
 
 
 def tractor(scene, dt: float) -> tuple[float, float] | None:
