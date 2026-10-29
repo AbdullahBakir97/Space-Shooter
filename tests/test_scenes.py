@@ -8,10 +8,10 @@ import pytest
 from space_shooter.game import Game
 from space_shooter.save import load_save
 from space_shooter.scenes.archive import ArchiveScene
-from space_shooter.scenes.gameplay import GameplayScene
 from space_shooter.scenes.hangar import HangarScene
 from space_shooter.scenes.log_panel import LogPanel
 from space_shooter.scenes.loop_end import LoopEndScene, RunResult
+from space_shooter.scenes.map import MapScene
 from space_shooter.scenes.pause import PauseScene
 from space_shooter.scenes.records import RecordsScene
 from space_shooter.scenes.settings import SettingsScene
@@ -31,16 +31,17 @@ def test_first_launch_shows_opening_log_then_launches(game):
     assert isinstance(game.scenes.top, LogPanel) and game.scenes.top.entry.id == "a1_open"
     press(game, "confirm")
     press(game, "confirm")
-    assert isinstance(game.scenes.top, GameplayScene)
+    assert isinstance(game.scenes.top, MapScene)  # the opening log closes onto the war map
 
 
 def test_returning_player_sees_hangar_menu(game):
     game.save.read_logs.append("a1_open")
     game.scenes.push(HangarScene(game))
     assert isinstance(game.scenes.top, HangarScene)
-    assert [i.label for i in game.scenes.top.menu.items] == ["LAUNCH", "LOG ARCHIVE", "RECORDS", "SETTINGS", "QUIT"]
+    labels = [i.label for i in game.scenes.top.menu.items]
+    assert labels == ["LAUNCH", "SHIPYARD", "LOG ARCHIVE", "RECORDS", "SETTINGS", "QUIT"]
     select(game, "LAUNCH")
-    assert isinstance(game.scenes.top, GameplayScene)
+    assert isinstance(game.scenes.top, MapScene)
 
 
 def test_death_shows_card_then_hangar_with_next_loop(game):
