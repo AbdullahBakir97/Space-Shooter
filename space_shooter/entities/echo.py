@@ -23,6 +23,7 @@ class Echo(pygame.sprite.Sprite):
         self.playback = EchoPlayback(trace)
         self.hp = ECHO_HP
         self.ram_cooldown = 0.0
+        self.trigger_count = 0
         self.rig = PartRig()
         self.loadout = Loadout()
         self._codes: dict[str, str] = {}
@@ -67,8 +68,11 @@ class Echo(pygame.sprite.Sprite):
             self.fading = FADE_TIME
             return
         shots = []
-        if state.fired:
-            shots += gun_volley(self.x, self.rect.top, self.loadout, ECHO_DAMAGE)
+        if state.fired:  # replay heavy slugs on the same rhythm the player fired them
+            self.trigger_count += 1
+            every = self.loadout.heavy_every()
+            heavy = every is not None and self.trigger_count % every == 0
+            shots += gun_volley(self.x, self.rect.top, self.loadout, ECHO_DAMAGE, heavy=heavy)
         shots += self.rig.update(dt, self.loadout, (self.x, self.y), world.enemies, ECHO_DAMAGE)
         if shots:
             world.fire_echo_bullets(shots)

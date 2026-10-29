@@ -674,3 +674,45 @@ def test_warden_phase_drop_is_scarred(game):
     scene.drops.empty()
     scene.warden_phase_drop((400, 200))
     assert [d.code[-1] for d in scene.drops] == ["*"]
+
+
+def test_echo_pressure_reaches_the_warden(game):
+    from space_shooter.encounters import WARDEN_INDEX
+
+    game.save.echoes = [seeded_trace(n, encounters=(WARDEN_INDEX,), x=150.0 + n * 100).to_data() for n in range(1, 6)]
+    scene = start_at(game, WARDEN_INDEX)
+    base = round(600 * scene.difficulty.enemy_hp * scene.hull_mult)
+    assert scene.boss.max_hp == round(600 * scene.difficulty.enemy_hp * scene.hull_mult * 1.40) != base
+
+
+def test_echo_replays_heavy_slugs(game):
+    from space_shooter.entities.bullets import HeavySlug
+
+    trace = seeded_trace(6, x=300.0)  # fires every fourth sample
+    trace.loadouts = [(0, 0.0, {"fore_l": "slug"})]
+    game.save.echoes = [trace.to_data()]
+    scene = start_at(game, 0)
+    run_frames(game, 60 * 3)
+    assert any(isinstance(b, HeavySlug) for b in scene.echo_bullets)
+
+
+def test_dash_shields_from_the_star_flare(game):
+    scene = start_at(game, 4)
+    scene.player.loadout.attach(Part("thruster"), (16, 30))
+    run_frames(game, 1)
+    scene.trigger_moment("flare")
+    run_frames(game, int(60 * 1.45))
+    assert scene.player.start_dash((1, 0))
+    run_frames(game, 6)
+    assert scene.player.health == PLAYER_MAX_HEALTH
+
+
+def test_shrapnel_points_where_it_flies(game):
+    scene = start_at(game, 0)
+    before = set(scene.player_bullets)
+    salvage_ops.shrapnel(scene, (400, 300))
+    new = [b for b in scene.player_bullets if b not in before]
+    sideways = min(new, key=lambda b: abs(b.vy))
+    upright = min(new, key=lambda b: abs(b.vx))
+    assert sideways.image.get_width() > sideways.image.get_height()
+    assert upright.image.get_height() > upright.image.get_width()

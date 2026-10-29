@@ -392,7 +392,8 @@ class GameplayScene(Scene):
                 self.flare_timer = FLARE_TIME
                 self.flash.trigger(EMBER, 160)
                 self.shake.add(SHAKE_HIT)
-                if self.player.alive_in_world and not self._shadowed(self.player.x, self.player.y):
+                exposed = not self._shadowed(self.player.x, self.player.y) and not self.player.dash.active
+                if self.player.alive_in_world and exposed:
                     self.player.invuln_timer = 0.0
                     self._player_damaged(self.player.take_damage(FLARE_PLAYER_DAMAGE, self.rng))
                 for enemy in list(self.enemies):
@@ -403,7 +404,9 @@ class GameplayScene(Scene):
 
     def _spawn(self, spawn: Spawn) -> None:
         x = SPAWN_MARGIN + spawn.x_frac * (WIDTH - 2 * SPAWN_MARGIN)
-        live = len(self.live_echoes())  # a strong roster draws a stronger response
+        # a strong roster draws a stronger response; count echoes flying this encounter even if they
+        # have not been placed yet this frame (the Warden spawns on the encounter's very first tick)
+        live = sum(1 for e in self.echoes if e.alive() and e.playback.has_encounter(self.director.index))
         kwargs = dict(
             hp_mult=self.difficulty.enemy_hp * self.hull_mult * (1 + ECHO_PRESSURE_HULL * live),
             speed_mult=self.difficulty.enemy_speed,

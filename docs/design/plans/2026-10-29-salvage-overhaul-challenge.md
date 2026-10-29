@@ -144,3 +144,17 @@ The autopilot never dodges or dashes, so a real player will take fewer hits.
 - **Drag field.** It is drawn as a faint ring whenever a tractor is fitted.
 - **Thrusters.** A newly fitted thruster arrives with its charge.
 - **Slug damage.** The slug's base damage was tuned in `entities/parts.py`, not `config.py`, because that is where the number lives.
+
+## Review follow-up
+
+A fresh review of the branch found no critical issues and passed all five review-focus items. Fixed, each with a test that failed first:
+- Echo pressure now reaches the Warden. It spawns on its encounter's first tick, before echoes are placed, so pressure now counts echoes that have data for the encounter.
+- Echoes replay heavy slugs on the same rhythm the player fired them.
+- An active dash shields you from the star flare, as the README promises.
+- Shrapnel shards point along their flight.
+
+Deferred:
+- Claw kills can never drop hull patches; the forced drop rerolls a patch into a part.
+- Re-fitting a thruster grants its charge again, so a knock-off and pick-up refills the dash.
+- The drag field leaves bullets slowed through the death beat.
+- With no parts, the Warden on Normal takes about three minutes with the main gun alone.

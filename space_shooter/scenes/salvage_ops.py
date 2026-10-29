@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import math
 
+import pygame
+
 from space_shooter.entities.bullets import PlayerBullet
 from space_shooter.salvage import SLOT_OFFSETS
 
@@ -85,4 +87,7 @@ def shrapnel(scene, pos) -> None:
     for i in range(SHRAPNEL_COUNT):
         angle = math.tau * i / SHRAPNEL_COUNT
         vel = (math.cos(angle) * SHRAPNEL_SPEED, math.sin(angle) * SHRAPNEL_SPEED)
-        scene.player_bullets.add(PlayerBullet(pos, vel, 1))
+        shard = PlayerBullet(pos, vel, 1)
+        shard.image = pygame.transform.rotate(shard.image, 90 - math.degrees(angle))  # point along its flight
+        shard.rect = shard.image.get_rect(center=shard.rect.center)
+        scene.player_bullets.add(shard)
