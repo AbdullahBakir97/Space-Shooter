@@ -83,8 +83,46 @@ the next one or turn for home.
   it, the war is lost and a fresh one starts. Your echoes, records and story
   carry over.
 
-The planets (KESS, HALE, MERE) are where ground combat will land next; for
-now they fight like any other location.
+**On the ground.** The three planets are taken on foot. Fly into KESS, HALE
+or MERE and the tug lands; the pilot climbs out with a sidearm and the
+planet's mission at the top of the screen.
+
+| Planet | Mission |
+| --- | --- |
+| KESS | Destroy the four brood nests. |
+| HALE | Hold the beacon for 90 seconds while waves come in from the edges. |
+| MERE | Find the downed ship's core and carry it back to the tug. Two nests guard the way. |
+
+- **The swarm on foot:**
+  - crawlers run at you in packs;
+  - spitters keep their distance and spit when they have a clear line;
+  - brood nests keep breeding crawlers while you are near.
+  - They find their way around rock and wreckage. Swarm-held and hive planets
+    have tougher swarm.
+- **Weapons:**
+  - the sidearm never runs dry;
+  - a rifle and a scattergun come from crates, with limited ammo and reloads;
+  - grenades burst after a second and stop at walls. Crates also hold
+    grenades.
+- **Survivors.** Three survivors of the old garrison are waiting on each
+  planet. Reach one and they join you: Q tells the squad to follow, E to hold,
+  and a right-click sends them to a spot. They shoot whatever swarm they can
+  see. A dead survivor leaves rifle ammo, and every survivor still alive when
+  you take off adds 100 salvage.
+- **Winning and dying.** Completing the mission takes the planet at once; walk
+  back to the tug and press Enter to take off. Dying on the ground ends the
+  loop, like dying in space.
+- **Health.** The pilot has their own health; the tug's hull waits at the pad.
+
+| On foot | Keyboard and mouse | Gamepad |
+| --- | --- | --- |
+| Move | WASD / arrows | Left stick |
+| Aim / fire | Mouse / left button (Space and Z also fire) | Right stick / A |
+| Dodge roll | Shift / X | X |
+| Weapons | 1 sidearm, 2 rifle, 3 scattergun; R reload | |
+| Grenade | G | |
+| Squad | Q follow, E hold, right-click move there | |
+| Take off (at the tug) | Enter | A |
 
 | In flight | Keyboard | Gamepad |
 | --- | --- | --- |
@@ -186,6 +224,7 @@ space_shooter/
   encounters.py              Act 1 encounters as data and their director
   campaign.py                the war: star system, claims, swarm spread, hives, war chest
   flight.py                  flying the system: lanes, drift, ash wear, patrols, repairs
+  ground.py                  the ground war: planet maps, hand weapons, the swarm on foot, squad, missions
   data/system.json           the fourteen locations and their lanes
   echoes.py                  recording, playback, roster rules, cluster targeting
   story.py                   radio-log conditions and selection
@@ -197,7 +236,7 @@ space_shooter/
   entities/                  tug, bullets, parts and drops, enemies, the Warden, hazards, echoes
   scenes/salvage_ops.py      claw, tractor, drag field and shrapnel behaviour
   scenes/run.py              one flown loop: the tug and its cargo across fights, closed once
-  scenes/                    hangar, flight, system chart, shipyard, gameplay, log panel,
+  scenes/                    hangar, flight, system chart, shipyard, gameplay, ground, log panel,
                              archive, records, settings, pause, loop-end card
 tests/                       headless pytest suite
 images/                      12x16 source sprites
@@ -205,7 +244,7 @@ sounds/                      Juhani Junkala's retro SFX collection (CC0)
 docs/design/            design specs and implementation plans
 ```
 
-The rule modules (`save`, `salvage`, `dash`, `campaign`, `flight`, `encounters`, `echoes`, `story`) do not
+The rule modules (`save`, `salvage`, `dash`, `campaign`, `flight`, `ground`, `encounters`, `echoes`, `story`) do not
 import pygame, so they are tested directly without a window.
 
 ## Development
@@ -216,7 +255,7 @@ ruff check . && ruff format --check .
 pytest
 ```
 
-The suite (356 tests) runs with SDL's dummy video and audio drivers, so it
+The suite (400 tests) runs with SDL's dummy video and audio drivers, so it
 passes on CI runners and headless machines. CI runs lint, format and tests on
 Python 3.11 to 3.13.
 
@@ -226,8 +265,8 @@ Act 1 is the first milestone of a larger campaign:
 
 1. **Strategy map** (done): a star system you fly through, where the swarm
    spreads each turn and you choose where to fight.
-2. **Ground combat**: top-down drops onto planets with a small squad you
-   command.
+2. **Ground combat** (done): top-down drops onto planets with a small squad
+   you command.
 3. **The Hive**: a swarm that evolves against how you play, and its queen.
 4. **The Factions**: hail instead of shooting, earn escorts or hunters, and a
    reputation that survives the loop.

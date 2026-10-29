@@ -152,3 +152,38 @@ def test_mouse_aim_and_keys(game, monkeypatch):
     press(game, "dash")
     run_frames(game, 1)
     assert g.world.rolling
+
+
+def test_headless_ground_autopilot(game, monkeypatch):
+    """Fly to KESS, land, burn out every nest with scripted inputs, take off and dock."""
+    fl, g = take_off_ready(game, monkeypatch, "m1")
+    w = g.world
+    w.invulnerable_for_tests = True
+
+    def script():
+        alive = [n for n in w.nests if n.alive]
+        if not alive:
+            return GroundInputs()
+        nest = alive[0]
+        if not w.map.line_of_sight(w.pilot.pos, nest.body.pos) or abs(w.pilot.x - nest.body.x) > 150:
+            spot = w.map.cast(nest.body.pos, (nest.body.x - 120, nest.body.y))
+            w.pilot.x, w.pilot.y = spot  # the autopilot walks; this test only needs it to arrive
+        return GroundInputs(fire=True, aim=nest.body.pos)
+
+    g.inputs_override = script
+    for _ in range(60 * 90):
+        if w.complete:
+            break
+        run_frames(game, 1)
+    assert w.complete and game.campaign().owner["m1"] == "player" and w.score >= 4 * ground.NEST_SCORE
+    w.pilot.x, w.pilot.y = w.map.pad
+    press(game, "confirm")
+    assert game.scenes.top is fl
+    run_frames(game, 1)  # back in space beside KESS
+    hx, hy = flight.world_pos(game.system.nodes["home"])
+    fl.tug.x, fl.tug.y = hx, hy - 30
+    run_frames(game, 1)
+    press(game, "confirm")
+    card = game.scenes.top
+    assert isinstance(card, LoopEndScene) and card.title == "DOCKED"
+    assert card.result.report.claimed == ["m1"] and game.campaign().salvage >= 4 * ground.NEST_SCORE
