@@ -18,6 +18,8 @@ from space_shooter.config import (
     SHAKE_BOSS_DEATH,
     SHAKE_EXPLOSION,
     SHAKE_HIT,
+    WARDEN_LOADOUT_FLOOR,
+    WARDEN_LOADOUT_STEP,
     WIDTH,
 )
 from space_shooter.echoes import EchoRecorder, EchoTrace, select_roster, store_trace
@@ -262,6 +264,7 @@ class GameplayScene(Scene):
     def _death_beat(self, dt: float) -> None:
         """Slow motion over the wreck, then the loop-end card."""
         slow = dt * DEATH_TIME_SCALE
+        salvage_ops.drag_field(self)  # the field dies with the tug
         self.enemies.update(slow, self)
         self.enemy_bullets.update(slow)
         self.death_timer -= dt
@@ -413,6 +416,9 @@ class GameplayScene(Scene):
             fire_mult=self.difficulty.enemy_fire_rate * (1 + ECHO_PRESSURE_FIRE * live),
             armed=not (spawn.kind == "drone" and self.director.index == 0),
         )
+        if spawn.kind == "warden":  # a bare tug faces a smaller Warden; a full rig faces all of it
+            parts = min(6, len(self.player.loadout.parts()))
+            kwargs["hp_mult"] *= WARDEN_LOADOUT_FLOOR + WARDEN_LOADOUT_STEP * parts
         enemy = ENEMY_CLASSES[spawn.kind](x, **kwargs)
         if spawn.kind == "warden":
             self.boss = enemy
@@ -574,7 +580,7 @@ class GameplayScene(Scene):
             self.effects.add(Explosion(center, scale=6, frame_time=0.08))
             burst(self.particles, center, 40, (EMBER, RUST, ASH), 320, 0.9, 4, self.rng)
 
-    def _kill_enemy(self, enemy: Enemy, award: bool = True, force_drop: bool = False) -> None:
+    def _kill_enemy(self, enemy: Enemy, award: bool = True, force_drop: bool = False, claw: bool = False) -> None:
         enemy.kill()
         self.kills += 1
         center = enemy.rect.center
@@ -594,11 +600,11 @@ class GameplayScene(Scene):
             smoke(self.particles, center, 4, self.rng)
             self.shake.add(SHAKE_EXPLOSION)
             self.game.audio.play("explosion")
-            self._drop(center, force=force_drop)
+            self._drop(center, force=force_drop, allow_patch=claw)
         if award:
             self.score += int(enemy.score * self.difficulty.score_mult)
 
-    def _drop(self, center, force: bool = False, rare: bool = False) -> None:
+    def _drop(self, center, force: bool = False, rare: bool = False, allow_patch: bool = False) -> None:
         if self.first_drop_pending and self.director.index == 0:
             self.first_drop_pending = False
             force = True
@@ -607,7 +613,7 @@ class GameplayScene(Scene):
         code = roll_drop(self.rng, chance, loadout.patch_share())
         if code is None:
             return
-        if force and code == "patch":
+        if force and code == "patch" and not allow_patch:
             code = self.rng.choice(list(PART_TYPES))
         if (rare or loadout.drops_scarred()) and code != "patch":
             code += "*"

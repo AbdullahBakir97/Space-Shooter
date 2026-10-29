@@ -40,8 +40,21 @@ def test_dash_configure_follows_thrusters():
     assert d.charges == 1 and d.max_charges == 1
     d.configure(0, 2.5)
     assert d.charges == 0
+    fresh = Dash(0, 2.5)
+    fresh.configure(1, 2.5)
+    assert fresh.charges == 1  # a thruster fitted for the first time arrives charged
+    fresh.try_start()
+    fresh.configure(2, 2.0)
+    assert fresh.charges == 1  # the second new thruster adds its own charge, not a full refill
+
+
+def test_refitting_the_same_thruster_does_not_refill():
+    d = Dash(0, 2.5)
     d.configure(1, 2.5)
-    assert d.charges == 1  # a newly fitted thruster arrives charged
-    d.try_start()
-    d.configure(2, 2.0)
-    assert d.charges == 1  # the second thruster adds its own charge, not a full refill
+    assert d.try_start() and d.charges == 0
+    d.update(0.2)
+    d.configure(0, 2.5)  # knocked off
+    d.configure(1, 2.5)  # picked straight back up
+    assert d.charges == 0
+    d.update(2.5)
+    assert d.charges == 1  # it still recharges normally
