@@ -35,6 +35,7 @@ class Encounter:
     script: tuple[SpawnEntry, ...]
     hazards: tuple[str, ...] = ()
     moments: tuple[tuple[float, str], ...] = ()
+    hull: float = 1.0  # enemy hull multiplier for this encounter (campaign twists)
 
 
 def _e(at: float, pattern: str, kind: str, count: int, x: float = 0.5) -> SpawnEntry:

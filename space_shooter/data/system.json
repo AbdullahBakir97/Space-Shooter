@@ -1,0 +1,26 @@
+{
+  "nodes": [
+    {"id": "home", "name": "ANCHOR STATION", "ring": "home", "kind": "station", "template": 0, "yield": 0, "pos": [400, 590]},
+    {"id": "o1", "name": "COLD WAKE FIELD", "ring": "outer", "kind": "field", "template": 0, "yield": 100, "pos": [250, 525]},
+    {"id": "o2", "name": "RUSTED BUOY", "ring": "outer", "kind": "station", "template": 0, "yield": 100, "pos": [550, 525]},
+    {"id": "o3", "name": "ASH DRIFT", "ring": "outer", "kind": "field", "template": 1, "yield": 100, "pos": [120, 405]},
+    {"id": "o4", "name": "THE SHELF", "ring": "outer", "kind": "field", "template": 1, "yield": 100, "pos": [680, 405]},
+    {"id": "o5", "name": "BONEYARD", "ring": "outer", "kind": "field", "template": 2, "yield": 100, "pos": [130, 235]},
+    {"id": "o6", "name": "SALT LINE", "ring": "outer", "kind": "station", "template": 3, "yield": 100, "pos": [670, 235]},
+    {"id": "m1", "name": "KESS", "ring": "middle", "kind": "planet", "template": 2, "yield": 300, "ground": true, "pos": [300, 420]},
+    {"id": "m2", "name": "VARO STATION", "ring": "middle", "kind": "station", "template": 3, "yield": 300, "pos": [500, 420]},
+    {"id": "m3", "name": "HALE", "ring": "middle", "kind": "planet", "template": 4, "yield": 300, "ground": true, "pos": [255, 290]},
+    {"id": "m4", "name": "ORIN DOCKS", "ring": "middle", "kind": "station", "template": 3, "yield": 300, "pos": [545, 290]},
+    {"id": "m5", "name": "MERE", "ring": "middle", "kind": "planet", "template": 4, "yield": 300, "ground": true, "pos": [400, 330]},
+    {"id": "c1", "name": "SHELF GATE", "ring": "core", "kind": "gate", "template": 4, "yield": 0, "pos": [400, 205]},
+    {"id": "c2", "name": "WARDEN CORE", "ring": "core", "kind": "core", "template": 5, "yield": 0, "pos": [540, 115]}
+  ],
+  "lanes": [
+    ["home", "o1"], ["home", "o2"],
+    ["o1", "o3"], ["o2", "o4"], ["o3", "o5"], ["o4", "o6"],
+    ["o1", "m1"], ["o2", "m2"], ["o3", "m1"], ["o3", "m3"], ["o4", "m2"], ["o4", "m4"], ["o5", "m3"], ["o6", "m4"],
+    ["m1", "m2"], ["m1", "m5"], ["m2", "m5"], ["m3", "m5"], ["m4", "m5"],
+    ["m3", "c1"], ["m4", "c1"], ["m5", "c1"], ["c1", "c2"]
+  ],
+  "swarm_start": ["o5", "o6"]
+}
