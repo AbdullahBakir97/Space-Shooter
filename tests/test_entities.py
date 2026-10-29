@@ -5,6 +5,7 @@ import pygame
 import pytest
 
 from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
+from space_shooter.dash import DASH_SPEED
 from space_shooter.entities.bullets import HeavySlug, SlugBullet
 from space_shooter.entities.enemies import ENEMY_CLASSES, Diver, Drone, Gunner
 from space_shooter.entities.parts import Drop, PartRig, draw_loadout
@@ -263,3 +264,52 @@ def test_armour_cracks_are_drawn(display):
     draw_loadout(a, whole, (100, 100))
     draw_loadout(b, cracked, (100, 100))
     assert pygame.image.tobytes(a, "RGB") != pygame.image.tobytes(b, "RGB")
+
+
+@pytest.mark.usefixtures("display")
+class TestDash:
+    def test_dash_needs_thruster(self):
+        p = Player()
+        p.update(0.0)
+        assert p.start_dash((1, 0)) is False
+
+    def test_dash_moves_fast_and_is_invulnerable(self):
+        p = Player()
+        p.loadout.attach(Part("thruster"), (-16, 30))
+        p.update(0.0)
+        x0 = p.x
+        assert p.start_dash((-1, 0))
+        p.update(0.1, (0, 0))
+        assert x0 - p.x == pytest.approx(DASH_SPEED * 0.1, abs=1)
+        assert p.take_damage(50, random.Random(0)) == "ignored"
+        p.update(0.2, (0, 0))
+        assert not p.dash.active
+
+    def test_dash_direction_defaults_up(self):
+        p = Player()
+        p.loadout.attach(Part("thruster"), (-16, 30))
+        p.update(0.0)
+        p.y = 500
+        p.start_dash((0, 0))
+        p.update(0.05)
+        assert p.y < 500 and p.x == pytest.approx(WIDTH / 2)
+
+    def test_afterburner_two_dashes(self):
+        p = Player()
+        p.loadout.attach(Part("thruster"), (-16, 30))
+        p.loadout.attach(Part("thruster"), (16, 30))
+        p.update(0.0)
+        assert p.start_dash((1, 0))
+        p.update(0.2)
+        assert p.start_dash((1, 0))
+        p.update(0.2)
+        assert p.start_dash((1, 0)) is False
+
+    def test_losing_thruster_clears_charges(self):
+        p = Player()
+        p.loadout.attach(Part("thruster"), (-16, 30))
+        p.update(0.0)
+        assert p.dash.charges == 1
+        p.loadout.slots["aft_l"] = None
+        p.update(0.5)
+        assert p.dash.charges == 0 and p.start_dash((1, 0)) is False

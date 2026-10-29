@@ -16,6 +16,7 @@ from space_shooter.config import (
     WEAPON_COOLDOWN,
     WIDTH,
 )
+from space_shooter.dash import DASH_SPEED, Dash
 from space_shooter.entities.bullets import Bullet
 from space_shooter.entities.parts import draw_loadout, gun_volley
 from space_shooter.salvage import HitOutcome, Loadout
@@ -39,6 +40,8 @@ class Player(pygame.sprite.Sprite):
         self.fire_cooldown = 0.0
         self.trigger_count = 0
         self.turret_aim: dict[str, float] = {}
+        self.dash = Dash(0, 2.5)
+        self.dash_dir = (0.0, -1.0)
         self.anim_time = 0.0
         self.tilt = 0.0
         self.last_outcome: HitOutcome | None = None
@@ -51,6 +54,9 @@ class Player(pygame.sprite.Sprite):
         self.anim_time += dt
         self.fire_cooldown = max(0.0, self.fire_cooldown - dt)
         self.invuln_timer = max(0.0, self.invuln_timer - dt)
+        self.dash.configure(self.loadout.dash_charges(), self.loadout.dash_recharge())
+        was_dashing = self.dash.active
+        self.dash.update(dt)
         if self.dead:
             return
         mx, my = move
@@ -58,6 +64,10 @@ class Player(pygame.sprite.Sprite):
         if length > 1:
             mx, my = mx / length, my / length
         speed = PLAYER_SPEED * self.loadout.speed_multiplier()
+        if was_dashing:  # a dash overrides steering for its short window
+            mx, my = self.dash_dir
+            speed = DASH_SPEED
+            length = 1.0
         self.x += mx * speed * dt
         self.y += my * speed * dt
         half_w, half_h = self.rect.width / 2, self.rect.height / 2
@@ -67,6 +77,16 @@ class Player(pygame.sprite.Sprite):
         self.tilt += (mx - self.tilt) * min(1.0, 10 * dt)
         frame = int(self.anim_time * 12) % 2 + 1 if length > 0.1 else int(self.anim_time * 6) % 3
         self.image = self.frames[frame]
+
+    def start_dash(self, direction: tuple[float, float]) -> bool:
+        """Burst along ``direction`` (straight up when idle); invulnerable while it lasts."""
+        if self.dead or not self.dash.try_start():
+            return False
+        dx, dy = direction
+        length = math.hypot(dx, dy)
+        self.dash_dir = (dx / length, dy / length) if length > 0.1 else (0.0, -1.0)
+        self.invuln_timer = max(self.invuln_timer, self.dash.remaining)
+        return True
 
     def try_fire(self) -> list[Bullet]:
         """Main gun plus one slug round per slug cannon, if the gun is ready."""

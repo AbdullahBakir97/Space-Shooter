@@ -34,12 +34,14 @@ def test_dash_charges_recharge_one_at_a_time():
     assert d.charges == 2
 
 
-def test_dash_configure_clamps_down():
+def test_dash_configure_follows_thrusters():
     d = Dash(2, 2.0)
     d.configure(1, 2.5)
     assert d.charges == 1 and d.max_charges == 1
     d.configure(0, 2.5)
     assert d.charges == 0
+    d.configure(1, 2.5)
+    assert d.charges == 1  # a newly fitted thruster arrives charged
+    d.try_start()
     d.configure(2, 2.0)
-    assert d.charges == 0  # gaining a thruster never refills instantly
-    assert 0.0 < d.recharge_fraction <= 1.0 or d.recharge_fraction == 0.0
+    assert d.charges == 1  # the second thruster adds its own charge, not a full refill

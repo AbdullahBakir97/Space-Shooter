@@ -26,10 +26,9 @@ class Dash:
         return min(1.0, self._refill / self.recharge)
 
     def configure(self, max_charges: int, recharge: float) -> None:
-        """Follow the loadout: losing a thruster removes charges; gaining one never refills instantly."""
-        if max_charges > self.max_charges and self.max_charges == 0:
-            self.charges = 0
-            self._refill = 0.0
+        """Follow the loadout: each newly fitted thruster brings one charge; losing one removes it."""
+        if max_charges > self.max_charges:
+            self.charges += max_charges - self.max_charges
         self.max_charges = max_charges
         self.recharge = recharge
         self.charges = min(self.charges, max_charges)

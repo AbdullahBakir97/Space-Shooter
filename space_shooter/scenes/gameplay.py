@@ -19,7 +19,7 @@ from space_shooter.config import (
     WIDTH,
 )
 from space_shooter.echoes import EchoRecorder, EchoTrace, select_roster, store_trace
-from space_shooter.effects import Explosion, Flash, FloatingText, Particle, ScreenShake, burst, smoke
+from space_shooter.effects import Afterimage, Explosion, Flash, FloatingText, Particle, ScreenShake, burst, smoke
 from space_shooter.encounters import WARDEN_INDEX, EncounterDirector, Spawn, loop_hull_multiplier
 from space_shooter.entities.bullets import EnemyBullet, HeavySlug, SlugBullet
 from space_shooter.entities.echo import Echo
@@ -149,6 +149,9 @@ class GameplayScene(Scene):
             from space_shooter.scenes.pause import PauseScene
 
             self.game.scenes.push(PauseScene(self.game))
+        elif action == "dash" and self.game.scenes.top is self and self.player.alive_in_world:
+            if self.player.start_dash(self.game.move_vector()):
+                self.game.audio.play("knock")
 
     # -- update --------------------------------------------------------------
     def update(self, dt: float) -> None:
@@ -188,6 +191,7 @@ class GameplayScene(Scene):
             self.tractor_target = salvage_ops.tractor(self, dt)
             salvage_ops.drag_field(self)
         self._exhaust(dt)
+        self._afterimages(dt)
         if self.player.alive_in_world:
             salvage_ops.claw_contacts(self, dt)
 
@@ -280,6 +284,15 @@ class GameplayScene(Scene):
         self.game.persist()
         self.result = RunResult(self.loop, reached, self.score, self.time, list(self.echoes_lost), victory)
         return self.result
+
+    def _afterimages(self, dt: float) -> None:
+        if not self.player.dash.active:
+            self.afterimage_timer = 0.0
+            return
+        self.afterimage_timer = getattr(self, "afterimage_timer", 0.0) + dt
+        while self.afterimage_timer >= 0.03:
+            self.afterimage_timer -= 0.03
+            self.effects.add(Afterimage(self.player.image, self.player.rect.center))
 
     def _exhaust(self, dt: float) -> None:
         if not self.player.alive_in_world:

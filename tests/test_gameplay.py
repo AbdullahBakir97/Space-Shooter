@@ -7,6 +7,7 @@ import pytest
 
 from space_shooter.config import HEIGHT, PLAYER_MAX_HEALTH, WIDTH
 from space_shooter.echoes import EchoTrace
+from space_shooter.effects import Afterimage
 from space_shooter.encounters import DRIFT_TIME, loop_hull_multiplier
 from space_shooter.entities.bullets import EnemyBullet, PlayerBullet
 from space_shooter.entities.enemies import ENEMY_CLASSES, Drone
@@ -606,3 +607,32 @@ def test_echo_bullets_hit_hulks(game):
     scene.echo_bullets.add(shot)
     run_frames(game, 20)
     assert hulk.hp < 8 and not shot.alive()
+
+
+def test_dash_key_mapping():
+    from space_shooter.game import JOY_BUTTON_ACTIONS, KEY_ACTIONS
+
+    assert KEY_ACTIONS[pygame.K_x] == KEY_ACTIONS[pygame.K_LSHIFT] == KEY_ACTIONS[pygame.K_RSHIFT] == "dash"
+    assert JOY_BUTTON_ACTIONS[2] == "dash"
+
+
+def test_dash_action_leaves_afterimages(game):
+    scene = start_at(game, 0)
+    scene.player.loadout.attach(Part("thruster"), (-16, 30))
+    run_frames(game, 1)
+    scene.handle_action("dash")
+    assert scene.player.dash.active
+    run_frames(game, 8)
+    assert any(isinstance(fx, Afterimage) for fx in scene.effects)
+
+
+def test_dash_ignored_while_paused(game):
+    from space_shooter.scenes.pause import PauseScene
+
+    scene = start_at(game, 0)
+    scene.player.loadout.attach(Part("thruster"), (-16, 30))
+    run_frames(game, 1)
+    game.scenes.push(PauseScene(game))
+    game.scenes.top.handle_action("dash")
+    scene.handle_action("dash")  # even if routed straight to the scene underneath
+    assert not scene.player.dash.active and scene.player.dash.charges == 1

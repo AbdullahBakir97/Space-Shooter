@@ -37,6 +37,25 @@ class Explosion(pygame.sprite.Sprite):
             self.rect = self.image.get_rect(center=center)
 
 
+class Afterimage(pygame.sprite.Sprite):
+    """A fading copy of the ship left behind by a dash."""
+
+    def __init__(self, image: pygame.Surface, center, life: float = 0.25) -> None:
+        super().__init__()
+        self.base = image.copy()
+        self.image = self.base
+        self.rect = self.image.get_rect(center=center)
+        self.life = self.max_life = life
+
+    def update(self, dt: float) -> None:
+        self.life -= dt
+        if self.life <= 0:
+            self.kill()
+            return
+        self.image = self.base.copy()
+        self.image.set_alpha(int(110 * self.life / self.max_life))
+
+
 class Particle(pygame.sprite.Sprite):
     def __init__(
         self,
