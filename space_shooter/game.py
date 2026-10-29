@@ -6,6 +6,7 @@ import pygame
 
 from space_shooter import assets, procgen
 from space_shooter.audio import AudioManager
+from space_shooter.campaign import CampaignState, load_system, new_campaign
 from space_shooter.config import FPS, HEIGHT, MAX_DT, TITLE, WIDTH
 from space_shooter.save import load_save, write_save
 from space_shooter.scenes.base import SceneManager
@@ -57,6 +58,7 @@ class Game:
         if notice:
             self.save.notice = notice
         self.logs = LogDirector(logs, self.save.read_logs)
+        self.system = load_system()
         self.starfield = Starfield()
         self.scenes = SceneManager()
         self.joystick: pygame.joystick.Joystick | None = None
@@ -142,6 +144,24 @@ class Game:
         return False
 
     # -- loop ----------------------------------------------------------------
+    def campaign(self) -> CampaignState:
+        """The war in progress; a finished (won or lost) or missing one is replaced by a fresh war."""
+        raw = self.save.campaign
+        state = None
+        if raw is not None:
+            try:
+                state = CampaignState.from_dict(raw)
+            except (KeyError, TypeError, ValueError):
+                state = None
+        if state is None or state.status != "active" or set(state.owner) != set(self.system.nodes):
+            state = new_campaign(self.system)
+            self.store_campaign(state)
+        return state
+
+    def store_campaign(self, state: CampaignState) -> None:
+        self.save.campaign = state.to_dict()
+        self.persist()
+
     def persist(self) -> None:
         """Write campaign progress; surface a notice instead of crashing."""
         if not write_save(self.save):

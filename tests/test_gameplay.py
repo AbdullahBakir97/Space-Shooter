@@ -762,3 +762,16 @@ def test_drag_field_releases_bullets_when_the_player_dies(game):
         scene.player.take_damage(999, rng)
     run_frames(game, 2)
     assert shot.speed_scale == 1.0
+
+
+def test_encounter_hull_applies(game):
+    from dataclasses import replace
+
+    from space_shooter.encounters import ENCOUNTERS, Spawn
+
+    scene = start_at(game, 3)
+    plain = spawn_one(scene, "gunner")
+    scene.director.encounters = tuple(replace(e, hull=2.0) for e in scene.director.encounters)
+    tough = spawn_one(scene, "gunner")
+    assert tough.max_hp == round(plain.max_hp * 2) or tough.max_hp == round(plain.max_hp * 2) + 1
+    assert ENCOUNTERS[3].hull == 1.0 and Spawn

@@ -31,6 +31,9 @@ class RunResult:
     time: float
     echoes_lost: list[int] = field(default_factory=list)
     victory: bool = False
+    report: object | None = None  # campaign.TurnReport when the loop was a campaign turn
+    cleared_route: bool = False
+    reached_name: str | None = None
 
 
 class LoopEndScene(Scene):
@@ -43,7 +46,38 @@ class LoopEndScene(Scene):
 
     @property
     def title(self) -> str:
-        return "THE WARDEN IS SILENT" if self.result.victory else f"LOOP {self.result.loop}"
+        r = self.result
+        if r.victory:
+            return "THE WARDEN IS SILENT"
+        if r.report is not None and r.report.status == "lost":
+            return "THE WAR IS LOST"
+        if r.cleared_route:
+            return "ROUTE CLEARED"
+        return f"LOOP {r.loop}"
+
+    def report_lines(self) -> list[str]:
+        """What this turn changed on the map, in plain words."""
+        report = self.result.report
+        if report is None:
+            return []
+        names = self.game.system.nodes
+
+        def listed(ids: list[str]) -> str:
+            return ", ".join(names[n].name for n in ids)
+
+        lines = []
+        if report.claimed:
+            lines.append(f"Taken: {listed(report.claimed)}")
+        if report.lost:
+            lines.append(f"Lost to the swarm: {listed(report.lost)}")
+        if report.fortify_spent:
+            lines.append(f"Fortifications held at {listed(report.fortify_spent)}")
+        if report.hives:
+            lines.append(f"Hives formed at {listed(report.hives)}")
+        if report.home_threatened and report.status == "active":
+            lines.append("The swarm is at the station's door.")
+        lines.append(f"+{report.salvage_gained:,} salvage")
+        return lines
 
     @property
     def closing_line(self) -> str:
@@ -65,9 +99,10 @@ class LoopEndScene(Scene):
     def draw(self, surface: pygame.Surface) -> None:
         dim_overlay(surface, 200)
         cx = WIDTH // 2
-        draw_text(surface, self.title, 64, (cx, 150), EMBER if self.result.victory else BONE)
+        lost = self.title == "THE WAR IS LOST"
+        draw_text(surface, self.title, 64, (cx, 150), EMBER if self.result.victory or lost else BONE)
         r = self.result
-        reached = ENCOUNTERS[min(r.reached, len(ENCOUNTERS) - 1)].name
+        reached = r.reached_name or ENCOUNTERS[min(r.reached, len(ENCOUNTERS) - 1)].name
         minutes, seconds = divmod(int(r.time), 60)
         rows = [
             ("REACHED", reached),
@@ -79,6 +114,9 @@ class LoopEndScene(Scene):
             y = 240 + i * 34
             draw_text(surface, label, 24, (cx - 20, y), ASH, "midright")
             draw_text(surface, value, 26, (cx + 20, y), STEEL, "midleft")
-        draw_text(surface, self.closing_line, 26, (cx, 420), BONE)
+        lines = self.report_lines()
+        for i, line in enumerate(lines):
+            draw_text(surface, line, 22, (cx, 384 + i * 26), EMBER if line.startswith("Lost") else STEEL)
+        draw_text(surface, self.closing_line, 26, (cx, 400 + len(lines) * 26), BONE)
         if self.time >= INPUT_DELAY:
             draw_text(surface, "ENTER to return to the hangar", 20, (cx, HEIGHT - 44), ASH)

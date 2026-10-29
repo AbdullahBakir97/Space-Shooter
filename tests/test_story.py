@@ -68,7 +68,7 @@ def test_mark_read_shares_list_with_save():
 
 def test_bundled_logs_valid():
     logs = load_logs()
-    assert len(logs) == 20 and len({log.id for log in logs}) == 20
+    assert len(logs) == 26 and len({log.id for log in logs}) == 26
     assert all(1 <= len(log.lines) <= 3 and log.speaker in SPEAKERS for log in logs)
     assert logs[0].id == "a1_open"
     assert {"a1_end_1", "a1_end_2", "a1_end_3", "a1_first_echo_lost", "a1_warden_seen"} <= {log.id for log in logs}
@@ -122,3 +122,21 @@ def test_encounter_logs_play_in_the_drift_before_their_encounter(upcoming, expec
     earlier = {1: [], 2: ["a1_ash"], 3: ["a1_ash", "a1_graveyard"], 4: ["a1_ash", "a1_graveyard", "a1_picket"]}
     d = LogDirector(load_logs(), read=["a1_open", "a1_empty_channel", *earlier[upcoming]])
     assert d.next_log(S(reached=upcoming)).id == expected
+
+
+@pytest.mark.parametrize(
+    "flag,expected",
+    [
+        ("node_claimed", "m_first_claim"),
+        ("node_lost", "m_first_lost"),
+        ("hive_formed", "m_first_hive"),
+        ("home_threatened", "m_home_threat"),
+        ("gate_open", "m_gate_open"),
+        ("war_lost", "m_war_lost"),
+    ],
+)
+def test_campaign_logs_trigger(flag, expected):
+    logs = load_logs()
+    read = [log.id for log in logs if not log.id.startswith("m_")]
+    d = LogDirector(logs, read=read)
+    assert d.next_log(S(flags={flag})).id == expected

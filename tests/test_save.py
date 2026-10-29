@@ -119,3 +119,25 @@ def test_damaged_record_is_dropped(tmp_path):
     (tmp_path / "save.json").write_text(json.dumps(payload))
     d = load_save(tmp_path)
     assert d.records == [] and d.loop == 2 and d.notice
+
+
+def test_v1_save_migrates_without_loss(tmp_path):
+    import json
+
+    echo = {"loop": 2, "reached": 1, "duration": 30.0, "samples": pack_samples([(0, 0.0, 1, 2, True)]), "loadouts": []}
+    record = {"loop": 2, "reached": 1, "salvage": 300, "time": 30.0, "difficulty": "normal"}
+    payload = {"version": 1, "loop": 3, "echoes": [echo], "records": [record], "flags": ["warden_seen"]}
+    (tmp_path / "save.json").write_text(json.dumps(payload))
+    d = load_save(tmp_path)
+    assert d.notice is None and d.campaign is None
+    assert (
+        d.loop == 3 and [e.loop for e in d.echoes] == [2] and d.records[0].salvage == 300 and d.flags == {"warden_seen"}
+    )
+    assert write_save(d, tmp_path)
+    assert json.loads((tmp_path / "save.json").read_text())["version"] == 2
+
+
+def test_campaign_round_trip_in_save(tmp_path):
+    d = SaveData(campaign={"owner": {"home": "player"}, "salvage": 5, "turn": 1})
+    write_save(d, tmp_path)
+    assert load_save(tmp_path).campaign == {"owner": {"home": "player"}, "salvage": 5, "turn": 1}

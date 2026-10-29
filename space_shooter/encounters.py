@@ -35,6 +35,7 @@ class Encounter:
     script: tuple[SpawnEntry, ...]
     hazards: tuple[str, ...] = ()
     moments: tuple[tuple[float, str], ...] = ()
+    hull: float = 1.0  # enemy hull multiplier for this encounter (campaign twists)
 
 
 def _e(at: float, pattern: str, kind: str, count: int, x: float = 0.5) -> SpawnEntry:
@@ -175,6 +176,7 @@ class EncounterDirector:
         self.cursor = 0
         self.fired_moments: set[str] = set()
         self.retreated = False
+        self.cleared = 0  # encounters fully cleared this run
         self._events: list[tuple[str, object]] = [("drift_start", 0)]
 
     @property
@@ -224,9 +226,10 @@ class EncounterDirector:
             return self._tick_encounter()
         if self.state == "clearing" and enemies_alive == 0:
             self._events.append(("encounter_end", self.index))
-            if self.index >= WARDEN_INDEX:
+            self.cleared += 1
+            if self.index >= len(self.encounters) - 1:
                 self.state = "complete"
-                self._events.append(("act_complete", None))
+                self._events.append(("run_complete", None))
             else:
                 self.index += 1
                 self.state = "drift"

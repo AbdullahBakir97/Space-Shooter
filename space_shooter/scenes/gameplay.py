@@ -7,7 +7,7 @@ import random
 
 import pygame
 
-from space_shooter import procgen
+from space_shooter import campaign, procgen
 from space_shooter.config import (
     DIFFICULTIES,
     ECHO_PRESSURE_FIRE,
@@ -33,7 +33,16 @@ from space_shooter.entities.parts import Drop, PartRig
 from space_shooter.entities.player import Player
 from space_shooter.hud import draw_hud
 from space_shooter.palette import ASH, BONE, EMBER, RUST, STEEL, STEEL_DIM
-from space_shooter.salvage import DROP_BASE, PART_TYPES, PATCH_HULL, SLOT_OFFSETS, SLOTS, part_from_code, roll_drop
+from space_shooter.salvage import (
+    DROP_BASE,
+    PART_TYPES,
+    PATCH_HULL,
+    SLOT_OFFSETS,
+    SLOTS,
+    Part,
+    part_from_code,
+    roll_drop,
+)
 from space_shooter.save import Record, add_record
 from space_shooter.scenes import salvage_ops
 from space_shooter.scenes.base import Scene
@@ -61,9 +70,11 @@ DEBRIS_PERIOD = 1.2
 
 
 class GameplayScene(Scene):
-    def __init__(self, game, seed: int | None = None) -> None:
+    def __init__(self, game, seed: int | None = None, route: list[str] | None = None) -> None:
         super().__init__(game)
         self.rng = random.Random(seed)
+        self.route: list[str] | None = None
+        self.campaign_state = None
         self.difficulty = DIFFICULTIES[game.settings.difficulty]
         self.player = Player()
         self.rig = PartRig()
@@ -76,7 +87,10 @@ class GameplayScene(Scene):
         self.effects: pygame.sprite.Group = pygame.sprite.Group()
         self.particles: pygame.sprite.Group = pygame.sprite.Group()
         self.texts: pygame.sprite.Group = pygame.sprite.Group()
-        self.director = EncounterDirector(self.rng)
+        if route is None:
+            self.director = EncounterDirector(self.rng)  # the classic Act 1 run
+        else:
+            self._begin_campaign_turn(route)
         self.loop = game.save.loop
         self.hull_mult = loop_hull_multiplier(self.loop)
         self.banner_text: str | None = None
@@ -279,16 +293,75 @@ class GameplayScene(Scene):
         if self.result is not None:
             return self.result
         save = self.game.save
-        reached = self.director.index
+        reached = self.director.encounter.index
         trace = self.recorder.finish(reached=reached, duration=self.time)
         traces = store_trace([EchoTrace.from_data(d) for d in save.echoes], trace)
         save.echoes = [t.to_data() for t in traces]
         record = Record(self.loop, reached, self.score, round(self.time, 1), self.game.settings.difficulty)
         add_record(save, record)
         save.loop += 1
+        report = self._close_campaign_turn(victory) if self.route is not None else None
         self.game.persist()
-        self.result = RunResult(self.loop, reached, self.score, self.time, list(self.echoes_lost), victory)
+        self.result = RunResult(
+            self.loop,
+            reached,
+            self.score,
+            self.time,
+            list(self.echoes_lost),
+            victory,
+            report=report,
+            cleared_route=self.route is not None and self.director.state == "complete" and not victory,
+            reached_name=self.director.encounter.name if self.route is not None else None,
+        )
         return self.result
+
+    # -- campaign turns -------------------------------------------------------
+    def _begin_campaign_turn(self, route: list[str]) -> None:
+        """Fly a planned route: trim it if the map changed, fit requisitioned parts, spend them."""
+        system = self.game.system
+        state = self.game.campaign()
+        route = campaign.valid_prefix(system, state, route)
+        if not route:  # nothing left of the plan: take the nearest open ground instead
+            options = [n for n in system.nodes if campaign.valid_route(system, state, [n])]
+            route = [min(options, key=lambda n: (system.distance_to_home(n), n))]
+        self.route = route
+        self.campaign_state = state
+        self.director = EncounterDirector(self.rng, campaign.route_encounters(system, state, route))
+        for kind in state.requisition:
+            free = [s for s in PART_TYPES[kind].slots if self.player.loadout.slots[s] is None]
+            if free:
+                self.player.loadout.attach(Part(kind), SLOT_OFFSETS[free[0]])
+        state.requisition = []
+        self.game.store_campaign(state)  # spent the moment the tug launches
+
+    def _close_campaign_turn(self, victory: bool):
+        system, state = self.game.system, self.campaign_state
+        cleared = self.director.cleared + (1 if victory and self.director.state != "complete" else 0)
+        report = campaign.apply_run(system, state, self.route, cleared, self.score, victory, self.rng)
+        flags = self.game.save.flags
+        if report.claimed:
+            flags.add("node_claimed")
+        if report.lost:
+            flags.add("node_lost")
+        if report.hives:
+            flags.add("hive_formed")
+        if report.home_threatened:
+            flags.add("home_threatened")
+        if not campaign.locked(system, state, campaign.GATE):
+            flags.add("gate_open")
+        if state.status == "lost":
+            flags.add("war_lost")
+        self.game.save.campaign = state.to_dict()
+        return report
+
+    def _route_cleared(self) -> None:
+        if self.result is not None:  # the Warden's fall already closed the loop
+            return
+        from space_shooter.scenes.loop_end import LoopEndScene
+
+        self.death_timer = float("inf")
+        self.game.audio.stop_all_loops()
+        self.game.scenes.push(LoopEndScene(self.game, self.end_loop(victory=False)))
 
     def _afterimages(self, dt: float) -> None:
         if not self.player.dash.active:
@@ -312,7 +385,7 @@ class GameplayScene(Scene):
     def _on_director_event(self, event: str, value) -> None:
         if event == "drift_start":
             self.game.audio.set_bed_level(0.12)
-            self._play_due_log(value)
+            self._play_due_log(self.director.encounters[value].index)
         elif event == "encounter_start":
             self.game.audio.set_bed_level(0.25)
             self.recorder.begin_encounter(value)
@@ -327,6 +400,8 @@ class GameplayScene(Scene):
                     self.hazards.add(Hulk((fx * WIDTH, y), seed=i))
         elif event == "moment":
             self.trigger_moment(value)
+        elif event == "run_complete" and self.route is not None:
+            self._route_cleared()
         elif event == "retreat":
             for enemy in self.enemies:
                 enemy.retreat()
@@ -411,10 +486,13 @@ class GameplayScene(Scene):
         # have not been placed yet this frame (the Warden spawns on the encounter's very first tick)
         live = sum(1 for e in self.echoes if e.alive() and e.playback.has_encounter(self.director.index))
         kwargs = dict(
-            hp_mult=self.difficulty.enemy_hp * self.hull_mult * (1 + ECHO_PRESSURE_HULL * live),
+            hp_mult=self.difficulty.enemy_hp
+            * self.hull_mult
+            * self.director.encounter.hull
+            * (1 + ECHO_PRESSURE_HULL * live),
             speed_mult=self.difficulty.enemy_speed,
             fire_mult=self.difficulty.enemy_fire_rate * (1 + ECHO_PRESSURE_FIRE * live),
-            armed=not (spawn.kind == "drone" and self.director.index == 0),
+            armed=not (spawn.kind == "drone" and self.director.encounter.index == 0),
         )
         if spawn.kind == "warden":  # a bare tug faces a smaller Warden; a full rig faces all of it
             parts = min(6, len(self.player.loadout.parts()))
@@ -605,7 +683,7 @@ class GameplayScene(Scene):
             self.score += int(enemy.score * self.difficulty.score_mult)
 
     def _drop(self, center, force: bool = False, rare: bool = False, allow_patch: bool = False) -> None:
-        if self.first_drop_pending and self.director.index == 0:
+        if self.first_drop_pending and self.director.encounter.index == 0:
             self.first_drop_pending = False
             force = True
         loadout = self.player.loadout
@@ -689,7 +767,7 @@ class GameplayScene(Scene):
             fade = min(1.0, self.banner_timer / 0.8)
             colour = tuple(int(c * fade) for c in BONE)
             draw_text(canvas, self.banner_text, 54, (WIDTH // 2, HEIGHT // 2 - 40), colour)
-            if self.director.index == WARDEN_INDEX:
+            if self.director.encounter.index == WARDEN_INDEX:
                 draw_text(canvas, "SOMETHING LARGE IS WAKING", 26, (WIDTH // 2, HEIGHT // 2 + 10), EMBER)
         for i, (text, t) in enumerate(reversed(self.radio_lines[-3:])):
             fade = min(1.0, t / 0.6)

@@ -59,5 +59,23 @@
     "The clock is moving. I don't know what happens next."]},
   {"id": "a1_end_3", "speaker": "unknown", "when": "flag:act1_complete", "priority": 88, "lines": [
     "Loop seal broken. Notifying the builders.",
-    "END OF ACT ONE"]}
+    "END OF ACT ONE"]},
+  {"id": "m_first_claim", "speaker": "pilot", "when": "flag:node_claimed", "priority": 52, "lines": [
+    "Marked it on the chart as mine.",
+    "Nobody left to argue. The map still feels smaller."]},
+  {"id": "m_first_lost", "speaker": "fleet", "when": "flag:node_lost", "priority": 55, "lines": [
+    "...contact lost with forward position...",
+    "...redraw the line. Redraw the line..."]},
+  {"id": "m_first_hive", "speaker": "unknown", "when": "flag:hive_formed", "priority": 58, "lines": [
+    "Something has started to grow where nobody went back.",
+    "It hums on every channel at once."]},
+  {"id": "m_home_threat", "speaker": "fleet", "when": "flag:home_threatened", "priority": 75, "lines": [
+    "Anchor Station: hostile contacts one lane out.",
+    "All tugs fall back. All tugs fall back."]},
+  {"id": "m_gate_open", "speaker": "warden", "when": "flag:gate_open", "priority": 72, "lines": [
+    "You have taken enough of my garden to find the door.",
+    "Come through, then. I have been waiting longer than you."]},
+  {"id": "m_war_lost", "speaker": "pilot", "when": "flag:war_lost", "priority": 80, "lines": [
+    "They took the station. I watched it go dark.",
+    "Then the clock ran back, and it was lit again."]}
 ]
